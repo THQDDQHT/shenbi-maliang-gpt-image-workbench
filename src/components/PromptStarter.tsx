@@ -123,6 +123,7 @@ export function PromptStarter({
   caseCategoriesLoaded = false,
   dailyHeadlineIdeas: dailyHeadlineIdeaInput,
   headlineIdeasLoaded = false,
+  headlinePromptPending = false,
   onOpenAiClientInstall,
   onOpenIntro,
   onRefreshCases,
@@ -134,6 +135,7 @@ export function PromptStarter({
   caseCategoriesLoaded?: boolean;
   dailyHeadlineIdeas?: string[];
   headlineIdeasLoaded?: boolean;
+  headlinePromptPending?: boolean;
   onOpenAiClientInstall?: () => void;
   onOpenIntro?: () => void;
   onRefreshCases?: () => Promise<unknown> | void;
@@ -395,9 +397,11 @@ export function PromptStarter({
             <button
               className="starter-title-prompt"
               type="button"
+              disabled={headlinePromptPending}
+              aria-busy={headlinePromptPending}
               onClick={() => onUseHeadlinePrompt(headlineParts.idea)}
               aria-label={t("starter.useCopy", { text: headlineParts.idea })}
-              title={t("starter.useThisCopy")}
+              title={headlinePromptPending ? t("promptTemplates.result.generating") : t("starter.useThisCopy")}
             >
               {headlineIdeaChars.map((char, index) => (
                 <span key={`${char}-${index}`} style={{ animationDelay: `${Math.round((headlinePrefixChars.length + index) * headlineCharStaggerMs)}ms` }}>

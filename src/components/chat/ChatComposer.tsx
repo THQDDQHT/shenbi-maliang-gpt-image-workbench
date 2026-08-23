@@ -616,13 +616,14 @@ export function ChatComposer({
     }
     if (promptOptimizationLoading) return;
     handledAutoOptimizePromptRequestIdRef.current = request.id;
-    onAutoOptimizePromptRequestHandled?.(request.id);
     stopPromptTemplateTyping();
     resetInputOptimizationState();
     closeSlashMenuWithoutChangingPrompt();
     onDraftPromptChange(sourcePrompt);
     window.setTimeout(() => textareaRef.current?.focus(), 0);
-    void optimizeCurrentPrompt(promptInputOptimizeStyle, sourcePrompt);
+    void optimizeCurrentPrompt(promptInputOptimizeStyle, sourcePrompt).finally(() => {
+      onAutoOptimizePromptRequestHandled?.(request.id);
+    });
   }, [autoOptimizePromptRequest?.id, promptOptimizationLoading]);
 
   function undoInputOptimization() {

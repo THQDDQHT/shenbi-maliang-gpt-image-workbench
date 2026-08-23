@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.71 - 2026-08-23
+
+### 中文
+
+- 案例素材选择器现在会自动识别透明图片，并用棋盘格清楚展示透明区域，与灵感空间和“我的图片”保持一致。
+- 点击首页标题灵感后，系统会在提示词优化完成前显示处理中并阻止重复点击，减少重复优化请求和内容状态冲突。
+
+### English
+
+- The case-material picker now detects transparent images automatically and displays transparent areas on a checkerboard, matching Inspiration and My Images.
+- After selecting a homepage headline idea, the interface now shows it as processing and prevents repeated clicks until prompt optimization finishes, reducing duplicate optimization requests and conflicting content states.
+
 ## v0.1.70 - 2026-08-22
 
 ### 中文

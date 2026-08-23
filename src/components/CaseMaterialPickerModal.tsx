@@ -342,6 +342,7 @@ export function CaseMaterialPickerModal({
                     alt={item.title}
                     loading={eager ? "eager" : "lazy"}
                     fetchPriority={highPriority ? "high" : "auto"}
+                    detectTransparency
                   />
                   <span className="case-picker-card-copy">
                     <strong>{item.title}</strong>

@@ -1357,7 +1357,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     setDraftPrompt(item.prompt, caseItemId && !isDefaultCaseItemId(caseItemId) ? { caseItemId, prompt: item.prompt } : null);
   };
   const useStarterHeadlinePrompt = useCallback((prompt: string) => {
-    if (sessionId) return;
+    if (sessionId || starterPromptOptimizeRequest) return;
     const nextPrompt = prompt.trim();
     if (!nextPrompt) return;
     setDraftPrompt(nextPrompt, null);
@@ -1366,7 +1366,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       id: starterPromptOptimizeRequestIdRef.current,
       prompt: nextPrompt
     });
-  }, [sessionId, setDraftPrompt]);
+  }, [sessionId, setDraftPrompt, starterPromptOptimizeRequest]);
   const handleStarterPromptOptimizeRequestHandled = useCallback((requestId: number) => {
     setStarterPromptOptimizeRequest((current) => (
       current?.id === requestId ? null : current
@@ -2324,6 +2324,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             caseCategoriesLoaded={starterCases.isFetched}
             dailyHeadlineIdeas={starterCopies.data?.copies}
             headlineIdeasLoaded={starterCopies.isFetched}
+            headlinePromptPending={Boolean(starterPromptOptimizeRequest)}
             user={user}
             onOpenAiClientInstall={aiClientInstallEnabled ? () => setAiClientInstallOpen(true) : undefined}
             onOpenIntro={() => setChatIntroOpen(true)}

@@ -172,9 +172,14 @@
   cursor: pointer;
 }
 
-.starter-title-prompt:hover,
+.starter-title-prompt:hover:not(:disabled),
 .starter-title-prompt:focus-visible {
   color: #2563eb;
+}
+
+.starter-title-prompt:disabled {
+  cursor: wait;
+  opacity: 0.58;
 }
 
 .starter-title-prompt:focus-visible {
