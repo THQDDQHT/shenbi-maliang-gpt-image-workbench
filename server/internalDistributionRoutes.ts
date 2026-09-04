@@ -13,8 +13,10 @@ const CODEX_PLUGIN_MANIFEST = "plugins/maliang-image-generator/.codex-plugin/plu
 const CODEX_PLUGIN_HELPER = "plugins/maliang-image-generator/skills/maliang-image-generator/scripts/maliang-helper.mjs";
 const CODEX_PLUGIN_LOCAL_MCP = "plugins/maliang-image-generator/mcp/maliang-local-mcp.mjs";
 const CODEX_PLUGIN_ARCHIVE_DATE = new Date("2026-01-01T00:00:00.000Z");
-const CODEX_PLUGIN_RELEASED_AT = "2026-08-22";
+const CODEX_PLUGIN_RELEASED_AT = "2026-09-04";
 const CODEX_PLUGIN_RELEASE_NOTES = [
+  "Windows 自动更新优先使用 Node 20+ 或 Bun，PowerShell 兜底改用内置 .NET SHA-256，不再依赖 Get-FileHash 模块自动加载。",
+  "成功检查仍缓存 24 小时；检查或安装失败只退避 15 分钟，避免一次临时错误阻止当天后续调用重试。",
   "文生图与改图统一支持透明、不透明和自动背景模式；透明输出使用 PNG 或 WebP，默认不传背景参数。",
   "历史消息重提会保留原背景模式和透明输出格式，ChatGPT Web 官网链路也会明确传达不透明背景要求。",
   "Codex 插件生图数量逻辑与 Web 工作台保持一致，支持一次请求 1 至 10 张，并以提示词中的明确数量为准。",
@@ -584,7 +586,7 @@ async function pluginLatestManifest(c: Context, cachedArchive?: { buffer: Buffer
       critical: false,
       blockOldVersion: false,
       restartRequired: true,
-      failurePolicy: "keep-current-and-continue"
+      failurePolicy: "keep-current-retry-after-15-minutes-and-continue"
     }
   };
 }
@@ -614,7 +616,7 @@ async function pluginInstallManifest(c: Context) {
       versionSource: ".codex-plugin/plugin.json",
       defaultMode: "auto",
       supportedModes: ["auto", "notify", "off"],
-      trigger: "受信任的插件 PreToolUse Hook 在调用 maliang MCP 工具前触发；24 小时内最多联网检查一次。",
+      trigger: "受信任的插件 PreToolUse Hook 在调用 maliang MCP 工具前触发；成功检查缓存 24 小时，失败 15 分钟后可重试。",
       check: [
         "0.3.0 是首个包含自动更新 Hook 的版本；0.2.x 及更早版本无法自行获得 Hook，发布后必须先完成一次人工更新到 0.3.0 或更高版本",
         "从当前插件 plugin.json 读取已加载版本，从 codex plugin list --json 读取精确 selector 的已安装版本",
@@ -631,7 +633,7 @@ async function pluginInstallManifest(c: Context) {
       rollback: [
         "下载、哈希、解压或清单校验失败时不触碰现有安装",
         "目录切换、插件刷新或 MCP 初始化失败时恢复旧目录，并报告仍在使用的旧版本",
-        "普通检查或更新失败时保留当前版本并继续本次马良工具调用；只有清单同时标记 incompatible、critical 和 blockOldVersion 时阻断旧工具",
+        "普通检查或更新失败时保留当前版本并继续本次马良工具调用，15 分钟后允许再次检查；只有清单同时标记 incompatible、critical 和 blockOldVersion 时阻断旧工具",
         "更新不主动清除 OAuth 凭据；仅在新版本返回 Auth required 时发起一次新的 oauthLogin 状态机",
         "成功后保留最近一个旧 Marketplace 备份；下一次兼容更新开始前才清理更早的备份，确保日常调用不为清理额外启动进程"
       ]
@@ -647,7 +649,7 @@ async function pluginInstallManifest(c: Context) {
       ],
       windows: [
         "使用 PowerShell 和 %LOCALAPPDATA% 下的 durableInstallDirectory",
-        "自动更新 Hook 直接使用 bundled auto-update.ps1；脚本内部读取 24 小时缓存，并由 PowerShell 完成下载、Expand-Archive 和精确 codex plugin add，不依赖 Node 或 Bun",
+        "自动更新 Hook 优先由 Node 20+ 执行 bundled auto-update.mjs，其次由 Bun 执行 auto-update.ts；两者都不存在时才进入 PowerShell 兜底，SHA-256 使用内置 .NET 实现，不依赖 Get-FileHash 模块自动加载",
         "图片默认保存到 %CODEX_HOME%\\generated_images\\maliang；未设置 CODEX_HOME 时使用用户目录下的 .codex",
         "最终 Markdown 图片地址必须把原生 C:\\ 路径规范化为 /C:/ 开头的正斜杠路径，不能直接使用反斜杠路径"
       ],

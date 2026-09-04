@@ -6,6 +6,7 @@ $PluginName = "maliang-image-generator"
 $MarketplaceName = "maliang-internal"
 $Selector = "$PluginName@$MarketplaceName"
 $CheckInterval = [TimeSpan]::FromHours(24)
+$FailureRetryInterval = [TimeSpan]::FromMinutes(15)
 $LockStale = [TimeSpan]::FromMinutes(10)
 $MaximumManifestBytes = 256KB
 $MaximumArchiveBytes = 50MB
@@ -445,6 +446,20 @@ function Get-RemoteManifest([Uri]$CheckUri) {
   return $latest
 }
 
+function Get-Sha256Hex([string]$FilePath) {
+  $stream = [IO.File]::Open($FilePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+  try {
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+      return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Save-RemoteArchive($Latest, [string]$ArchivePath) {
   $downloadUri = [Uri][string]$Latest.downloadUrl
   [void](Invoke-LimitedHttpGet $downloadUri "application/zip" $MaximumArchiveBytes 45 $ArchivePath)
@@ -452,7 +467,7 @@ function Save-RemoteArchive($Latest, [string]$ArchivePath) {
   if ($archive.Length -ne [int64]$Latest.size -or $archive.Length -gt $MaximumArchiveBytes) {
     throw "Downloaded archive size mismatch"
   }
-  $hash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $hash = Get-Sha256Hex $ArchivePath
   if ($hash -cne ([string]$Latest.sha256).ToLowerInvariant()) {
     throw "Downloaded archive SHA-256 mismatch"
   }
@@ -553,9 +568,12 @@ function Invoke-MaliangAutoUpdate {
         return
       }
     }
-    if ($state.lastCheckAt) {
-      $lastCheck = [DateTime]::Parse([string]$state.lastCheckAt).ToUniversalTime()
-      if ([DateTime]::UtcNow - $lastCheck -ge [TimeSpan]::Zero -and [DateTime]::UtcNow - $lastCheck -lt $CheckInterval) {
+    $failed = -not [string]::IsNullOrWhiteSpace([string]$state.lastError)
+    $checkTimestamp = if ($failed -and $state.lastErrorAt) { $state.lastErrorAt } else { $state.lastCheckAt }
+    $retryInterval = if ($failed) { $FailureRetryInterval } else { $CheckInterval }
+    if ($checkTimestamp) {
+      $lastCheck = [DateTime]::Parse([string]$checkTimestamp).ToUniversalTime()
+      if ([DateTime]::UtcNow - $lastCheck -ge [TimeSpan]::Zero -and [DateTime]::UtcNow - $lastCheck -lt $retryInterval) {
         return
       }
     }

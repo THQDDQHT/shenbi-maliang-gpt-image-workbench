@@ -25,7 +25,7 @@ After that completion gate succeeds, do not call `maliang_report_device` before 
 
 ## Plugin version
 
-- The trusted plugin `PreToolUse` Hook defaults to `auto`. Before a Maliang MCP tool call it checks the deployment's stable `/plugin/latest.json`, cached so it contacts the server at most once every 24 hours.
+- The trusted plugin `PreToolUse` Hook defaults to `auto`. Before a Maliang MCP tool call it checks the deployment's stable `/plugin/latest.json`; successful checks are cached for 24 hours, while check or installation failures may retry after 15 minutes.
 - A compatible newer SemVer is downloaded and verified by size and SHA-256, extracted beside the durable Marketplace, validated, switched transactionally, and refreshed only through `maliang-image-generator@maliang-internal`. The updater rejects a different origin, archive root, plugin identity, MCP endpoint, Hook/Skill entry, or any symbolic link.
 - The current task keeps its already loaded tools. After a successful update, continue the current call accurately and tell the user that the new version activates in the next task or after restarting Codex; never claim hot reload.
 - Network, validation, extraction, filesystem, or plugin-refresh failures keep the current version and do not block an ordinary image call. Only a stable manifest explicitly marked `incompatible`, `critical`, and `blockOldVersion` may block the old tool.

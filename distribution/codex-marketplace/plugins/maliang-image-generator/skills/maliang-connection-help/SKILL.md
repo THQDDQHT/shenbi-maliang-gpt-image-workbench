@@ -52,7 +52,7 @@ Once `maliang_report_device` has returned `reported=true`, do not repeat it befo
 
 ## Update
 
-1. Automatic updates default to `auto` through the plugin's trusted `PreToolUse` Hook. It checks the stable channel before Maliang tool use, with a 24-hour cache; equal or older remote SemVer versions are a no-op.
+1. Automatic updates default to `auto` through the plugin's trusted `PreToolUse` Hook. It checks the stable channel before Maliang tool use; successful checks are cached for 24 hours, while check or installation failures may retry after 15 minutes. Equal or older remote SemVer versions are a no-op.
 2. Version `0.3.0` is the first release that contains this Hook. An installed `0.2.x` or older plugin cannot bootstrap code it does not have; update it manually once to `0.3.0` or newer, then use the automatic flow.
 3. The Hook must be reviewed and trusted after first installation or when its definition changes. If Codex reports that a Hook needs review, inspect it through `/hooks`; do not report automatic updating as active while Codex is skipping the Hook.
 4. A compatible update follows `/plugin/install.json` `updatePolicy`: verify same-origin manifest and download, size and SHA-256 before touching the current install; extract beside the durable Marketplace; reject symbolic links; validate archive root, Marketplace, plugin identity/version, MCP endpoint, and Hook/Skill entries; preserve the old directory; atomically switch; refresh only `maliang-image-generator@maliang-internal`.

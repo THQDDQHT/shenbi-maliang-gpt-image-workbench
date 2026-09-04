@@ -9,6 +9,7 @@ import {
   parseLatestManifest,
   readPluginManifest,
   readUpdateResponseWithLimit,
+  updateCheckIsFresh,
   validateMarketplaceRoot
 } from "../distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update";
 import { shouldRunPowerShell } from "../distribution/codex-marketplace/plugins/maliang-image-generator/hooks/windows-update-gate";
@@ -225,7 +226,7 @@ describe("Maliang Codex plugin distribution", () => {
       "distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
       "utf8"
     )) as { hooks?: string; version?: string };
-    expect(pluginManifest.version).toBe("0.5.0");
+    expect(pluginManifest.version).toBe("0.5.1");
     expect(pluginManifest.hooks).toBe("./hooks/hooks.json");
 
     const hooks = JSON.parse(await readFile(
@@ -253,8 +254,20 @@ describe("Maliang Codex plugin distribution", () => {
       "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.cmd",
       "utf8"
     );
+    expect(windowsHook).toContain("where node");
+    expect(windowsHook).toContain("auto-update.mjs");
+    expect(windowsHook).toContain("where bun");
+    expect(windowsHook).toContain("auto-update.ts");
     expect(windowsHook).toContain("auto-update.ps1");
     expect(windowsHook).not.toContain("windows-update-gate.ts");
+    expect(windowsHook.indexOf("auto-update.mjs")).toBeLessThan(windowsHook.indexOf("auto-update.ts"));
+    expect(windowsHook.indexOf("auto-update.ts")).toBeLessThan(windowsHook.indexOf("auto-update.ps1"));
+    const powerShellUpdater = await readFile(
+      "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.ps1",
+      "utf8"
+    );
+    expect(powerShellUpdater).toContain("[Security.Cryptography.SHA256]::Create()");
+    expect(powerShellUpdater).not.toContain("Get-FileHash");
     expect(await readFile(
       "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.mjs",
       "utf8"
@@ -433,9 +446,83 @@ foreach ($value in @(
       expect(await shouldRunPowerShell({ environmentMode: "off", pluginData: directory })).toBe(false);
       await writeFile(path.join(directory, "update-state.json"), JSON.stringify({
         schemaVersion: 1,
+        lastCheckAt: new Date().toISOString(),
+        lastErrorAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        lastError: "temporary failure"
+      }));
+      expect(await shouldRunPowerShell({ pluginData: directory })).toBe(false);
+      await writeFile(path.join(directory, "update-state.json"), JSON.stringify({
+        schemaVersion: 1,
+        lastCheckAt: new Date().toISOString(),
+        lastErrorAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+        lastError: "temporary failure"
+      }));
+      expect(await shouldRunPowerShell({ pluginData: directory })).toBe(true);
+      await writeFile(path.join(directory, "update-state.json"), JSON.stringify({
+        schemaVersion: 1,
         lastCheckAt: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
       }));
       expect(await shouldRunPowerShell({ pluginData: directory })).toBe(true);
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
+  test("keeps successful checks cached for 24 hours but retries failures after 15 minutes", () => {
+    const now = Date.parse("2026-09-04T00:00:00.000Z");
+    expect(updateCheckIsFresh({
+      lastCheckAt: new Date(now - 23 * 60 * 60 * 1000).toISOString()
+    }, now)).toBe(true);
+    expect(updateCheckIsFresh({
+      lastCheckAt: new Date(now - 25 * 60 * 60 * 1000).toISOString()
+    }, now)).toBe(false);
+    expect(updateCheckIsFresh({
+      lastCheckAt: new Date(now - 10 * 60 * 1000).toISOString(),
+      lastErrorAt: new Date(now - 10 * 60 * 1000).toISOString(),
+      lastError: "temporary failure"
+    }, now)).toBe(true);
+    expect(updateCheckIsFresh({
+      lastCheckAt: new Date(now - 16 * 60 * 1000).toISOString(),
+      lastErrorAt: new Date(now - 16 * 60 * 1000).toISOString(),
+      lastError: "temporary failure"
+    }, now)).toBe(false);
+  });
+
+  test("PowerShell fallback hashes archives without Get-FileHash", async () => {
+    if (process.platform !== "win32") return;
+    const directory = await mkdtemp(path.join(tmpdir(), "maliang-windows-update-hash-"));
+    const fixturePath = path.join(directory, "archive.zip");
+    const scriptPath = path.join(directory, "verify-hash.ps1");
+    const updaterPath = path.resolve(
+      "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.ps1"
+    ).replaceAll("'", "''");
+    const escapedFixturePath = fixturePath.replaceAll("'", "''");
+    const fixture = Buffer.from("maliang-update-archive");
+    const expected = createHash("sha256").update(fixture).digest("hex");
+    try {
+      await writeFile(fixturePath, fixture);
+      await writeFile(scriptPath, `
+$ErrorActionPreference = "Stop"
+. '${updaterPath}'
+function Get-FileHash { throw "Get-FileHash must not be called" }
+$actual = Get-Sha256Hex '${escapedFixturePath}'
+if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
+`);
+      const processHandle = Bun.spawn([
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath
+      ], { stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(processHandle.stdout).text(),
+        new Response(processHandle.stderr).text(),
+        processHandle.exited
+      ]);
+      expect({ stdout, stderr, exitCode }).toEqual({ stdout: "", stderr: "", exitCode: 0 });
     } finally {
       await rm(directory, { force: true, recursive: true });
     }
@@ -484,7 +571,7 @@ foreach ($value in @(
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       publicBaseUrl: "https://maliang.example.com",
-      pluginVersion: "0.5.0",
+      pluginVersion: "0.5.1",
       install: {
         href: "https://maliang.example.com/install",
         instruction: "访问 https://maliang.example.com/install，安装神笔马良。"
@@ -528,7 +615,7 @@ foreach ($value in @(
         supported: boolean;
       };
     };
-    expect(manifest.version).toBe("0.5.0");
+    expect(manifest.version).toBe("0.5.1");
     expect(manifest.execution.owner).toBe("current-ai-agent");
     expect(manifest.execution.mode).toBe("execute-installation");
     expect(manifest.execution.startImmediatelyAfterReading).toBe(true);
@@ -569,7 +656,7 @@ foreach ($value in @(
     expect(html).not.toContain('<nav class="nav">');
     expect(html).not.toContain('<span class="eyebrow">');
     expect(html).toContain('<div class="title-row"><img class="title-logo" src="/image/logo-small.webp" alt=""><h1>安装神笔马良插件</h1>');
-    expect(html).toContain('<span class="version-badge">v0.5.0</span>');
+    expect(html).toContain('<span class="version-badge">v0.5.1</span>');
     expect(html).toContain('<img class="hero-art" src="/image/install/maliang-plugin-install-hero.webp"');
     expect(html).not.toContain('/image/help/maliang-help-hero-v2.webp');
     expect(html).toContain("Claude Code、TRAE Work、WorkBuddy");
@@ -615,7 +702,7 @@ foreach ($value in @(
     };
     expect(manifest.version).toBe(await readCodexPluginVersion());
     expect(manifest.channel).toBe("stable");
-    expect(manifest.releasedAt).toBe("2026-08-22");
+    expect(manifest.releasedAt).toBe("2026-09-04");
     expect(manifest.releaseNotes.join("\n")).toContain("透明、不透明和自动背景模式");
     expect(manifest.downloadUrl).toBe("https://open-source.example/plugin/download/latest");
     expect(manifest.mcpResource).toBe("https://open-source.example/api/external-mcp/mcp");

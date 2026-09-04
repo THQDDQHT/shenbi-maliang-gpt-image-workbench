@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.73 - 2026-09-04
+
+### 中文
+
+- 神笔马良 Codex 插件升级至 `0.5.1`，修复 Windows 自动更新可能因本地校验环境而失败的问题；失败检查会更快重试，同时继续保留当前版本和正常生图能力。
+
+### English
+
+- The Shenbi Maliang Codex plugin is upgraded to `0.5.1`, fixing Windows automatic updates that could fail in some local verification environments; failed checks now retry sooner while preserving the current version and normal image generation.
+
 ## v0.1.72 - 2026-09-04
 
 ### 中文

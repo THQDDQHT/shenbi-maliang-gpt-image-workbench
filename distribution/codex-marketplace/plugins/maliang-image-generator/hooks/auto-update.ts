@@ -20,6 +20,7 @@ const MARKETPLACE_NAME = "maliang-internal";
 const SELECTOR = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const UPDATE_CHECK_PATH = "/plugin/latest.json";
 const DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_FAILURE_RETRY_INTERVAL_MS = 15 * 60 * 1000;
 const LOCK_STALE_MS = 10 * 60 * 1000;
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
@@ -694,10 +695,17 @@ async function readMode(pluginData: string): Promise<UpdateMode> {
   }
 }
 
-function lastCheckIsFresh(state: UpdateState, intervalMs: number) {
-  if (!state.lastCheckAt) return false;
-  const checkedAt = Date.parse(state.lastCheckAt);
-  return Number.isFinite(checkedAt) && Date.now() - checkedAt >= 0 && Date.now() - checkedAt < intervalMs;
+export function updateCheckIsFresh(
+  state: Pick<UpdateState, "lastCheckAt" | "lastError" | "lastErrorAt">,
+  nowMs = Date.now(),
+  successIntervalMs = DEFAULT_CHECK_INTERVAL_MS,
+  failureRetryIntervalMs = DEFAULT_FAILURE_RETRY_INTERVAL_MS
+) {
+  const failed = Boolean(state.lastError);
+  const checkedAt = Date.parse(failed ? state.lastErrorAt ?? state.lastCheckAt ?? "" : state.lastCheckAt ?? "");
+  const age = nowMs - checkedAt;
+  const intervalMs = failed ? failureRetryIntervalMs : successIntervalMs;
+  return Number.isFinite(checkedAt) && age >= 0 && age < intervalMs;
 }
 
 async function acquireLock(pluginData: string) {
@@ -799,7 +807,7 @@ export async function runAutoUpdate(options?: {
         return;
       }
     }
-    if (lastCheckIsFresh(state, DEFAULT_CHECK_INTERVAL_MS)) return;
+    if (updateCheckIsFresh(state)) return;
 
     const checkUrl = checkUrlFromHomepage(current.homepage);
     let latest: LatestManifest;
@@ -899,7 +907,8 @@ export async function main() {
   }
 }
 
-const isMainModule = import.meta.main === true
-  || Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+const isMainModule = Boolean(
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
 
 if (isMainModule) await main();

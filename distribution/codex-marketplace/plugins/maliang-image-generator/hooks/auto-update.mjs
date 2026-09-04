@@ -1,6 +1,3 @@
-import { createRequire } from "node:module";
-var __require = /* @__PURE__ */ createRequire(import.meta.url);
-
 // distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.ts
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -23,6 +20,7 @@ var MARKETPLACE_NAME = "maliang-internal";
 var SELECTOR = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 var UPDATE_CHECK_PATH = "/plugin/latest.json";
 var DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+var DEFAULT_FAILURE_RETRY_INTERVAL_MS = 15 * 60 * 1000;
 var LOCK_STALE_MS = 10 * 60 * 1000;
 var MAX_MANIFEST_BYTES = 256 * 1024;
 var MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
@@ -578,11 +576,12 @@ async function readMode(pluginData) {
     return "auto";
   }
 }
-function lastCheckIsFresh(state, intervalMs) {
-  if (!state.lastCheckAt)
-    return false;
-  const checkedAt = Date.parse(state.lastCheckAt);
-  return Number.isFinite(checkedAt) && Date.now() - checkedAt >= 0 && Date.now() - checkedAt < intervalMs;
+function updateCheckIsFresh(state, nowMs = Date.now(), successIntervalMs = DEFAULT_CHECK_INTERVAL_MS, failureRetryIntervalMs = DEFAULT_FAILURE_RETRY_INTERVAL_MS) {
+  const failed = Boolean(state.lastError);
+  const checkedAt = Date.parse(failed ? state.lastErrorAt ?? state.lastCheckAt ?? "" : state.lastCheckAt ?? "");
+  const age = nowMs - checkedAt;
+  const intervalMs = failed ? failureRetryIntervalMs : successIntervalMs;
+  return Number.isFinite(checkedAt) && age >= 0 && age < intervalMs;
 }
 async function acquireLock(pluginData) {
   const lockPath = path.join(pluginData, "auto-update.lock");
@@ -672,7 +671,7 @@ async function runAutoUpdate(options) {
         return;
       }
     }
-    if (lastCheckIsFresh(state, DEFAULT_CHECK_INTERVAL_MS))
+    if (updateCheckIsFresh(state))
       return;
     const checkUrl = checkUrlFromHomepage(current.homepage);
     let latest;
@@ -763,11 +762,12 @@ async function main() {
     printHookOutput(updateContext(`神笔马良自动更新失败，已保留当前版本并继续本次工具调用：${message}`));
   }
 }
-var isMainModule = __require.main == __require.module === true || Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+var isMainModule = Boolean(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
 if (isMainModule)
   await main();
 export {
   validateMarketplaceRoot,
+  updateCheckIsFresh,
   runAutoUpdate,
   readUpdateResponseWithLimit,
   readPluginManifest,

@@ -49,7 +49,7 @@
 ### 1. 检查
 
 1. 用户首次安装或 Hook 定义变化后审查并信任插件 Hook；Codex 未信任时会跳过，不能宣称自动检查已经运行。
-2. 受信任的 `PreToolUse` Hook 在 `mcp__maliang__.*` 工具调用前运行；默认 `auto`，通过 `PLUGIN_DATA/update-state.json` 保证 24 小时内最多联网检查一次。
+2. 受信任的 `PreToolUse` Hook 在 `mcp__maliang__.*` 工具调用前运行；默认 `auto`。成功检查通过 `PLUGIN_DATA/update-state.json` 缓存 24 小时，检查或安装失败只退避 15 分钟，避免一次环境或网络错误阻止当天后续调用重试。
 3. 用当前插件 `plugin.json` 读取已加载版本，用 `codex plugin list --json` 找到精确 selector `maliang-image-generator@maliang-internal` 和已安装版本。
 4. 只从插件 `homepage` 同源的 `/plugin/latest.json` 获取 stable 清单并按 SemVer 比较；latest 小于或等于当前版本时结束。
 5. `auto` 自动应用兼容更新，`notify` 只提示，`off` 不检查。缺少设置时使用 `auto`；用户可通过 `PLUGIN_DATA/update-settings.json` 或 `MALIANG_PLUGIN_UPDATE_MODE` 显式覆盖。
@@ -88,7 +88,7 @@
 
 `0.3.0` 是第一个包含自动更新 Hook 的版本。已经安装的 `0.2.x` 或更早版本没有本地 Hook，服务端不能隔空执行用户电脑上的更新器，因此发布后必须先人工更新一次到 `0.3.0` 或更高版本；从这次引导更新之后，兼容 stable 更新才默认自动完成。
 
-Hook 命令从 `PLUGIN_ROOT` 运行受版本控制的更新器，只把设置、检查状态、锁和诊断日志写入可写的 `PLUGIN_DATA`。macOS/Linux 优先用 Node 20+ 执行 `auto-update.mjs`，Node 不满足时由 Bun 执行过渡兼容的 `auto-update.ts`，分别通过 `ditto`/`unzip` 解压；两者都不存在时安全跳过更新检查，不影响 Remote MCP。Windows 直接进入 `auto-update.ps1`，脚本内部读取模式与 24 小时缓存，再由 PowerShell 执行 `Invoke-WebRequest`、`Expand-Archive` 和精确的 `codex plugin add`，完全不要求 Node 或 Bun。插件首次安装或 Hook 定义发生变化后，用户必须审查并信任该 Hook；信任的是精确定义，未信任时 Codex 会跳过。
+Hook 命令从 `PLUGIN_ROOT` 运行受版本控制的更新器，只把设置、检查状态、锁和诊断日志写入可写的 `PLUGIN_DATA`。各平台优先用 Node 20+ 执行 `auto-update.mjs`，Node 不满足时由 Bun 执行过渡兼容的 `auto-update.ts`；macOS/Linux 分别通过 `ditto`/`unzip` 解压。Windows 在两者都不可用时才进入 `auto-update.ps1`，PowerShell 兜底通过 .NET 直接计算 SHA-256，再执行 `Invoke-WebRequest`、`Expand-Archive` 和精确的 `codex plugin add`，不依赖 `Get-FileHash` 模块自动加载。插件首次安装或 Hook 定义发生变化后，用户必须审查并信任该 Hook；信任的是精确定义，未信任时 Codex 会跳过。
 
 `0.4.0` 开始，本地附件上传和原图持久化统一由普通 ESM 文件 `maliang-helper.mjs` 实现，Node 20+ 与 Bun 执行同一份代码，不维护 Python 或 TypeScript 业务副本。`auto-update.ts` 和 `windows-update-gate.ts` 暂时保留在 ZIP 中，仅用于兼容已安装 `0.3.x` 的更新包校验；新版校验器同时要求 `auto-update.mjs` 与 `maliang-helper.mjs` 存在，避免安装缺少权威运行文件的归档。
 
@@ -111,6 +111,8 @@ Hook 命令从 `PLUGIN_ROOT` 运行受版本控制的更新器，只把设置、
 `0.4.9` 让 Codex 插件生图数量逻辑与 Web 工作台保持一致，支持一次请求 1 至 10 张并以提示词中的明确数量为准；多图和部分成功任务会逐张保存、交付已有结果并明确报告缺失数量或失败。
 
 `0.5.0` 为文生图和改图统一增加背景模式契约：支持透明、不透明和自动背景，透明输出使用 PNG 或 WebP；历史消息重提保留原背景与输出格式，ChatGPT Web 官网链路通过提示词明确传达透明或不透明要求。
+
+`0.5.1` 修复 Windows 自动更新在非交互 Hook 环境中无法加载 `Get-FileHash` 的问题：Windows 包装器优先使用 Node 20+，其次使用 Bun，PowerShell 兜底通过 .NET 直接计算 SHA-256；成功检查仍缓存 24 小时，失败则在 15 分钟后允许重试。
 
 更新器的正常输出保持安静。只有发现更新、完成更新、更新失败或出现强制不兼容迁移时，才通过 Hook 结构化输出告知当前任务。普通错误 fail-open，不能因为更新服务暂时不可用而让文生图、改图或任务查询不可用。
 
