@@ -8,6 +8,10 @@ import {
   type PromptOptimizerProviderRow
 } from "./promptOptimizerRoutes";
 import { normalizePath, safeJson } from "./utils";
+import { imageEditPromptHasExplicitGroups } from "../src/lib/imagePromptCount";
+import type { ImageEditIntent } from "../src/lib/imageAnnotations";
+
+export { imageEditPromptHasExplicitGroups } from "../src/lib/imagePromptCount";
 
 const IMAGE_PROMPT_PLAN_VERSION = 1 as const;
 const IMAGE_PROMPT_PLAN_TIMEOUT_MS = 45_000;
@@ -33,6 +37,8 @@ type ImagePromptPlanRequest = {
   prompt: string;
   imageCount: number;
   taskType: "generation" | "edit";
+  editIntent?: ImageEditIntent;
+  sourceInputCount?: number;
   userId: string;
   jobId: string;
   signal?: AbortSignal;
@@ -53,6 +59,16 @@ export function fallbackImagePromptPlan(imageCount: number, reason: unknown = ""
     detectedGroupCount: 0,
     prompts: [],
     ...(compactReason(reason) ? { fallbackReason: compactReason(reason) } : {})
+  };
+}
+
+export function sharedImagePromptPlan(imageCount: number): ImagePromptPlan {
+  return {
+    version: IMAGE_PROMPT_PLAN_VERSION,
+    mode: "shared",
+    requestedCount: imageCount,
+    detectedGroupCount: 0,
+    prompts: []
   };
 }
 
@@ -151,6 +167,7 @@ function initialPlannerMessages(input: ImagePromptPlanRequest): PromptModelMessa
       content: JSON.stringify({
         requestedImageCount: input.imageCount,
         taskType: input.taskType,
+        sourceInputCount: Math.max(0, Math.trunc(Number(input.sourceInputCount) || 0)),
         originalPrompt: input.prompt
       }, null, 2)
     }
@@ -342,13 +359,13 @@ export async function resolveImagePromptPlan(
   requestModel?: ImagePromptPlanModelRequest
 ): Promise<ImagePromptPlan> {
   if (input.imageCount <= 1) {
-    return {
-      version: IMAGE_PROMPT_PLAN_VERSION,
-      mode: "shared",
-      requestedCount: input.imageCount,
-      detectedGroupCount: 0,
-      prompts: []
-    };
+    return sharedImagePromptPlan(input.imageCount);
+  }
+  if (
+    input.taskType === "edit"
+    && !imageEditPromptHasExplicitGroups(input.prompt, input.editIntent, input.sourceInputCount)
+  ) {
+    return sharedImagePromptPlan(input.imageCount);
   }
   const provider = requestModel ? null : resolveLanguageModelProvider("image.prompt_plan");
   if (!requestModel && !provider) return fallbackImagePromptPlan(input.imageCount, "没有可用的多图提示词规划模型");

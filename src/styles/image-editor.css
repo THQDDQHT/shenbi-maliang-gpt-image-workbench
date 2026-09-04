@@ -176,6 +176,7 @@
 .editor-icon-btn:disabled,
 .editor-round-btn:disabled,
 .editor-text-btn:disabled,
+.editor-text-btn[aria-disabled="true"],
 .thumb-step-btn:disabled {
   color: #b6bbc4;
   cursor: not-allowed;
@@ -208,11 +209,12 @@
   font-weight: 600;
 }
 
-.editor-primary-btn:hover:not(:disabled) {
+.editor-primary-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: #202020;
 }
 
-.editor-primary-btn:disabled {
+.editor-primary-btn:disabled,
+.editor-primary-btn[aria-disabled="true"] {
   opacity: 0.42;
   cursor: not-allowed;
 }
@@ -960,7 +962,34 @@
 .image-editor-composer-tools {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
+}
+
+.image-editor-composer .image-count-trigger {
+  min-height: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+}
+
+.image-editor-composer .image-count-trigger:hover:not(:disabled),
+.image-editor-composer .image-count-trigger:focus-visible,
+.image-editor-composer .image-count-trigger[aria-expanded="true"] {
+  background: var(--button-default-hover-bg);
+}
+
+.image-editor-count-notice {
+  max-width: min(770px, 100%);
+  margin-bottom: 6px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 6px 11px;
+  color: #1d4ed8;
+  background: rgba(239, 246, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.10);
+  font-size: 12px;
+  line-height: 1.3;
+  pointer-events: auto;
 }
 
 .image-editor-composer.has-preview {
@@ -1096,7 +1125,8 @@
   background: #050505;
 }
 
-.editor-send-btn:disabled {
+.editor-send-btn:disabled,
+.editor-send-btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }

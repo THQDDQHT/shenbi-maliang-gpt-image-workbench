@@ -46,10 +46,14 @@ function qualityOptionDescription(option: QualityOption, t: Translate) {
 export function EditorSizePicker({
   value,
   options,
+  disabled = false,
+  onDisabledClick,
   onSelect
 }: {
   value: string;
   options: SizeOption[];
+  disabled?: boolean;
+  onDisabledClick?: () => void;
   onSelect: (option: SizeOption) => void;
 }) {
   const { t } = useI18n();
@@ -67,9 +71,26 @@ export function EditorSizePicker({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   return (
     <div className="editor-size-picker" ref={wrapRef}>
-      <button type="button" className="editor-text-btn" onClick={() => setOpen((next) => !next)} aria-haspopup="listbox" aria-expanded={open}>
+      <button
+        type="button"
+        className="editor-text-btn"
+        aria-disabled={disabled}
+        onClick={() => {
+          if (disabled) {
+            onDisabledClick?.();
+            return;
+          }
+          setOpen((next) => !next);
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
         <span className="size-trigger-icon" aria-hidden="true">
           {selected ? <span style={sizePreviewStyle(selected.previewRatio, 20)} /> : <Ratio size={20} />}
         </span>
@@ -77,7 +98,7 @@ export function EditorSizePicker({
         {selected ? <small>{selected.ratio}</small> : null}
         <ChevronDown size={20} className={open ? "open" : ""} />
       </button>
-      {open ? (
+      {open && !disabled ? (
         <div className="editor-size-menu" role="listbox">
           {options.map((option) => (
             <button
@@ -319,11 +340,13 @@ export function BackgroundPicker({
 export function ImageCountStepper({
   value,
   onChange,
+  disabled = false,
   min = MIN_IMAGE_COUNT,
   max = MAX_IMAGE_COUNT
 }: {
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
   min?: number;
   max?: number;
 }) {
@@ -357,6 +380,10 @@ export function ImageCountStepper({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   useLayoutEffect(() => {
     if (!open) return;
     updateMenuPosition();
@@ -378,6 +405,7 @@ export function ImageCountStepper({
         data-tooltip={t("picker.imageCountTooltip")}
         aria-haspopup="listbox"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((next) => !next)}
       >
         <span className="size-trigger-icon image-count-trigger-icon" aria-hidden="true">

@@ -73,15 +73,34 @@ function firstExplicitImageCount(prompt: string) {
   return matches[0]?.count ?? 0;
 }
 
-function groupedPromptImageCount(prompt: string) {
+function labelledPromptImageCount(prompt: string, labelPattern: string) {
   const normalized = normalizeFullWidthDigits(prompt);
   const indexes = new Set<number>();
-  const groupPattern = /(?:^|[\r\n])\s*(?:图|图片|画面|海报|image|picture|photo)\s*([0-9〇零一二两三四五六七八九十]+)(?=\s*[:：、,.，]|\s+)/gim;
+  const groupPattern = new RegExp(
+    `(?:^|[\\r\\n,，;；])\\s*(?:${labelPattern})\\s*([0-9〇零一二两三四五六七八九十]+)(?=\\s*[:：、,.，]|\\s+)`,
+    "gim"
+  );
   for (const match of normalized.matchAll(groupPattern)) {
     const index = numberTokenValue(match[1] ?? "");
     if (index > 0 && index <= MAX_IMAGE_COUNT) indexes.add(index);
   }
-  if (indexes.size >= 2 && indexes.has(1)) return Math.max(...indexes);
+  return indexes.size >= 2 && indexes.has(1) ? Math.max(...indexes) : 0;
+}
+
+function explicitOutputGroupedPromptImageCount(prompt: string) {
+  return labelledPromptImageCount(
+    prompt,
+    "(?:输出(?:图(?:片|像)?|画面)?|结果(?:图(?:片|像)?|画面)?|候选(?:图(?:片|像)?|画面)?|版本(?:图(?:片|像)?|画面)?|output|result|variant)"
+  );
+}
+
+function groupedPromptImageCount(prompt: string) {
+  const normalized = normalizeFullWidthDigits(prompt);
+  const labelledCount = labelledPromptImageCount(
+    normalized,
+    "(?:图(?:片|像)?|画面|海报|image|picture|photo)"
+  );
+  if (labelledCount > 0) return labelledCount;
 
   if (!/(?:分别|依次|逐张|逐图|separately|one\s+by\s+one)/i.test(normalized)) return 0;
   const numberedIndexes = new Set<number>();
@@ -117,4 +136,35 @@ export function resolvePromptImageCount(prompt: string, selectedCount: unknown) 
   if (groupedCount > 0) return resolveSelectedImageCount(groupedCount);
   if (requestsUnspecifiedMultipleImages(prompt)) return selected > 1 ? selected : 2;
   return selected;
+}
+
+export function resolveImageEditCount(
+  prompt: string,
+  selectedCount: unknown,
+  editIntent: "standard" | "annotation" | "remove",
+  sourceInputCount = 1
+) {
+  if (editIntent === "remove") return MIN_IMAGE_COUNT;
+  const selected = resolveSelectedImageCount(selectedCount);
+  const explicitCount = firstExplicitImageCount(prompt);
+  if (explicitCount > 0) return resolveSelectedImageCount(explicitCount);
+  const groupedCount = editIntent === "standard"
+    ? Math.max(0, Math.trunc(Number(sourceInputCount) || 0)) > 1
+      ? explicitOutputGroupedPromptImageCount(prompt)
+      : groupedPromptImageCount(prompt)
+    : 0;
+  if (groupedCount > 0) return resolveSelectedImageCount(groupedCount);
+  if (requestsUnspecifiedMultipleImages(prompt)) return selected > 1 ? selected : 2;
+  return selected;
+}
+
+export function imageEditPromptHasExplicitGroups(
+  prompt: string,
+  editIntent: "standard" | "annotation" | "remove" = "standard",
+  sourceInputCount = 1
+) {
+  if (editIntent !== "standard") return false;
+  if (explicitOutputGroupedPromptImageCount(prompt) >= 2) return true;
+  if (Math.max(0, Math.trunc(Number(sourceInputCount) || 0)) > 1) return false;
+  return labelledPromptImageCount(prompt, "(?:图(?:片|像)?|画面|image|picture|photo)") >= 2;
 }

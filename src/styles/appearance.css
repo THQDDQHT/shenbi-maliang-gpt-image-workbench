@@ -389,6 +389,7 @@ html[data-appearance="dark"] .editor-composer-tool:hover:not(:disabled) {
 html[data-appearance="dark"] .editor-icon-btn:disabled,
 html[data-appearance="dark"] .editor-round-btn:disabled,
 html[data-appearance="dark"] .editor-text-btn:disabled,
+html[data-appearance="dark"] .editor-text-btn[aria-disabled="true"],
 html[data-appearance="dark"] .thumb-step-btn:disabled,
 html[data-appearance="dark"] .brush-step-btn:disabled,
 html[data-appearance="dark"] .image-editor-preview-tool:disabled {
@@ -497,6 +498,13 @@ html[data-appearance="dark"] .image-editor-annotation-summary {
   color: var(--app-muted);
 }
 
+html[data-appearance="dark"] .image-editor-count-notice {
+  border-color: rgba(96, 165, 250, 0.34);
+  color: #bfdbfe;
+  background: rgba(30, 64, 175, 0.26);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.26);
+}
+
 html[data-appearance="dark"] .image-editor-annotation-tooltip {
   border-color: var(--app-border-strong);
   color: var(--app-text);
@@ -527,11 +535,12 @@ html[data-appearance="dark"] .editor-send-btn {
   color: var(--button-primary-text);
 }
 
-html[data-appearance="dark"] .editor-send-btn:hover:not(:disabled) {
+html[data-appearance="dark"] .editor-send-btn:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--button-primary-hover-bg);
 }
 
-html[data-appearance="dark"] .editor-send-btn:disabled {
+html[data-appearance="dark"] .editor-send-btn:disabled,
+html[data-appearance="dark"] .editor-send-btn[aria-disabled="true"] {
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -983,6 +992,17 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-editor-composer .image-count-trigger {
+  border: 0;
+  background: transparent;
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-editor-composer .image-count-trigger:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-editor-composer .image-count-trigger:focus-visible,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-editor-composer .image-count-trigger[aria-expanded="true"] {
+  background: var(--button-default-hover-bg);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card,

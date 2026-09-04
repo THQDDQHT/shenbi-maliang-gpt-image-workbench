@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderOpen, Images, Lightbulb, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Search, Sparkles, X } from "lucide-react";
+import { FolderOpen, Images, Lightbulb, MessageCircle, MessageCirclePlus, PanelLeft, Search, Sparkles } from "lucide-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
@@ -33,7 +33,7 @@ export function SharedWorkbenchShell() {
   return (
     <div className={cx("app-shell", "shared-guest-shell", sidebarCollapsed && "sidebar-collapsed", "sidebar-motion-expanded")}>
       <button className="mobile-menu-btn" type="button" onClick={() => setMobileMenuOpen(true)} aria-label={t("sidebar.openMenu")}>
-        <Menu size={20} />
+        <PanelLeft size={20} aria-hidden="true" />
       </button>
       <aside
         className={cx("sidebar", mobileMenuOpen && "open", collapsedToggleVisible && "collapsed-toggle-visible")}
@@ -72,7 +72,7 @@ export function SharedWorkbenchShell() {
                   <PanelLeft size={18} aria-hidden="true" />
                 </button>
                 <button className="icon-btn mobile-only" type="button" onClick={() => setMobileMenuOpen(false)} aria-label={t("sidebar.closeMenu")}>
-                  <X size={18} />
+                  <PanelLeft size={18} aria-hidden="true" />
                 </button>
               </div>
             </div>

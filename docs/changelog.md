@@ -2,6 +2,30 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.72 - 2026-09-04
+
+### 中文
+
+- 图片编辑现在可选择一次生成 1 至 10 张候选结果；多张编辑会分别使用同一条完整要求发起单图请求，图片评论和多参考图的编号不再被误拆成不同文案，明确的输出分组也支持换行或逗号分隔。
+- 编辑透明原图时会根据文件的真实 Alpha 自动使用透明背景参数和 PNG 输出，并向图片渠道补充默认保持透明 Alpha 的说明，无需在编辑界面额外选择；需要新增或替换背景时，直接在编辑要求中说明即可。
+- 图片任务生成期间仍可在编辑器中缩放、拖动、旋转、切换图片，并继续准备评论、移除、画笔、数量和素材；只有发送与会立即发起编辑的宽高比操作保持锁定，点击时会提示原因。
+- 分享会话的移动端头部现在让菜单按钮与标题、登录操作保持同一中心线，并统一使用与桌面侧栏相同的展开/收起图标。
+- 手机端图片预览现在支持主图左右滑动切换和双指捏合缩放，并用触摸手势提示替代桌面滚轮提示；同时保留左右按钮、缩略图点击与横向滚动，放大后可单指拖动查看细节，底部缩放滑杆则在手机端隐藏以节省空间。
+- 手机端图片预览仅有下载操作时，下载按钮会与旋转、缩放及尺寸/重置状态按钮合并为紧凑的一排，并降低底部工具栏高度，为主图释放更多显示空间；分享预览也与 Web 端一致，不再同时显示两个尺寸恢复按钮。
+- 分享图片预览中的评论编辑描述现在会隐藏内部坐标，只展示编号、评论内容和额外说明，与会话消息中的显示保持一致。
+- 手机端登录和注册表单提高了页签、输入框、验证码、提交按钮与错误提示的玻璃模糊强度，并降低控件底色透明度，复杂背景下的文字和输入内容更清晰，桌面端视觉保持不变。
+
+### English
+
+- Image editing can now generate 1–10 candidates at once; multi-result edits send separate single-image requests with the same complete instruction, comment and multi-reference numbering no longer splits prompts, and explicit output groups may be separated by lines or commas.
+- When editing a source file with real alpha transparency, the request automatically uses transparent background parameters and PNG output and also tells the image provider to preserve alpha by default, without adding another editor control; users can describe a new or replacement background directly in the edit instructions.
+- While an image task is running, the editor still allows local zooming, panning, rotation, image navigation, and preparation of comments, removal masks, brush settings, counts, and materials; only submission and aspect-ratio actions that immediately start an edit remain locked and explain why when clicked.
+- Shared conversations now align the mobile menu button with the title and authentication actions on one center line, while using the same expand/collapse icon as the desktop sidebar.
+- Mobile image previews now support swiping between images and pinch-to-zoom, with a touch-gesture hint replacing the desktop wheel hint; the previous/next buttons, thumbnail selection, and horizontal thumbnail scrolling remain available, zoomed images can be panned with one finger, and the bottom zoom slider is hidden on mobile to save space.
+- When download is the only mobile preview action, it now shares one compact row with the rotate, zoom, and size/reset state controls, reducing the bottom toolbar height to leave more room for the image; shared previews now match the web experience instead of showing two size-recovery buttons at once.
+- Comment-edit descriptions in shared image previews now hide internal coordinates while preserving numbering, comment text, and extra instructions, matching their display in the conversation.
+- Mobile login and registration forms now use stronger glass blur and less transparent control backgrounds for tabs, inputs, verification controls, submit buttons, and errors, improving readability over detailed backgrounds without changing the desktop appearance.
+
 ## v0.1.71 - 2026-08-23
 
 ### 中文

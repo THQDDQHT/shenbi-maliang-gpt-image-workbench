@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolvePromptImageCount, resolveSelectedImageCount } from "./imagePromptCount";
+import { resolveImageEditCount, resolvePromptImageCount, resolveSelectedImageCount } from "./imagePromptCount";
 
 describe("prompt-first image count resolution", () => {
   test("uses an explicit prompt image count before the page selection", () => {
@@ -11,6 +11,8 @@ describe("prompt-first image count resolution", () => {
 
   test("recognizes image-labelled prompt groups without confusing object counts", () => {
     expect(resolvePromptImageCount("图1：白猫\n图2：黑猫\n图3：橘猫", 1)).toBe(3);
+    expect(resolvePromptImageCount("图1：白猫，图2：黑猫", 1)).toBe(2);
+    expect(resolvePromptImageCount("Image 1: white cat, Image 2: black cat", 1)).toBe(2);
     expect(resolvePromptImageCount("分别生成：\n1. 白猫\n2. 黑猫", 1)).toBe(2);
     expect(resolvePromptImageCount("生成两只狗在草地上奔跑", 1)).toBe(1);
   });
@@ -32,5 +34,13 @@ describe("prompt-first image count resolution", () => {
     const annotationPrompt = "分别修改：\n1. (x: 20.0%, y: 30.0%) 改成白色\n2. (x: 40.0%, y: 50.0%) 删除文字";
     expect(resolvePromptImageCount(annotationPrompt, 1)).toBe(2);
     expect(resolveSelectedImageCount(1)).toBe(1);
+  });
+
+  test("keeps editor counts independent while removal remains single-image", () => {
+    expect(resolveImageEditCount("增强光影层次", 4, "standard")).toBe(4);
+    expect(resolveImageEditCount("再生成两张不同构图的图片", 4, "annotation")).toBe(2);
+    expect(resolveImageEditCount("移除选中区域", 6, "remove")).toBe(1);
+    expect(resolveImageEditCount("图1：保留主体\n图2：作为风格参考", 4, "standard", 2)).toBe(4);
+    expect(resolveImageEditCount("结果1：加眼镜，结果2：加帽子", 4, "standard", 2)).toBe(2);
   });
 });

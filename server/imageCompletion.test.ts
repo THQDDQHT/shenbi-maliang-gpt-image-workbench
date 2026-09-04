@@ -39,6 +39,56 @@ describe("image completion scheduling", () => {
     expect(result.completedCount).toBe(4);
   });
 
+  test("runs shared edit candidates as concurrent n=1 requests with the same prompt", async () => {
+    const requests: ImageCompletionBatchRequest[] = [];
+    let active = 0;
+    let maxActive = 0;
+
+    await runImageCompletion({
+      plan: sharedPlan(3),
+      originalPrompt: "加一副眼镜，再加一个光头强",
+      concurrency: 2,
+      sharedRequestMode: "single",
+      requestBatch: async (request) => {
+        requests.push(request);
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, request.imageIndexStart === 2 ? 2 : 8));
+        active -= 1;
+        return { items: [`img-${request.imageIndexStart}`], result: request.roundIndex };
+      },
+      commitBatch: async () => undefined
+    });
+
+    expect(maxActive).toBe(2);
+    expect(requests.map((item) => ({ prompt: item.prompt, n: item.imageCount, indexes: item.imageIndexes }))).toEqual([
+      { prompt: "加一副眼镜，再加一个光头强", n: 1, indexes: [1] },
+      { prompt: "加一副眼镜，再加一个光头强", n: 1, indexes: [2] },
+      { prompt: "加一副眼镜，再加一个光头强", n: 1, indexes: [3] }
+    ]);
+  });
+
+  test("requests only missing shared edit slots with the original prompt", async () => {
+    const requests: ImageCompletionBatchRequest[] = [];
+
+    await runImageCompletion({
+      plan: sharedPlan(4),
+      originalPrompt: "保持完整编辑要求",
+      existingImageIndexes: [1, 3],
+      sharedRequestMode: "single",
+      requestBatch: async (request) => {
+        requests.push(request);
+        return { items: [`img-${request.imageIndexStart}`], result: request.roundIndex };
+      },
+      commitBatch: async () => undefined
+    });
+
+    expect(requests.map((item) => ({ prompt: item.prompt, n: item.imageCount, indexes: item.imageIndexes }))).toEqual([
+      { prompt: "保持完整编辑要求", n: 1, indexes: [2] },
+      { prompt: "保持完整编辑要求", n: 1, indexes: [4] }
+    ]);
+  });
+
   test("runs grouped prompts sequentially with n=1 and resumes from existing images", async () => {
     const requests: ImageCompletionBatchRequest[] = [];
 

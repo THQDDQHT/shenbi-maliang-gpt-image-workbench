@@ -3,7 +3,7 @@ import type { CSSProperties, FocusEvent, FormEvent, MouseEvent, PointerEvent as 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Camera, ChevronRight, CircleHelp, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Camera, ChevronRight, CircleHelp, FolderOpen, Images, Lightbulb, LogOut, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { languagePreferenceLabel, useI18n, type LocaleCode, type Translate } from "../i18n";
@@ -1660,7 +1660,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   return (
     <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
       <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label={t("sidebar.openMenu")}>
-        <Menu size={20} />
+        <PanelLeft size={20} aria-hidden="true" />
       </button>
       <aside
         className={cx("sidebar", mobileMenuOpen && "open", collapsedToggleVisible && "collapsed-toggle-visible")}
@@ -1723,7 +1723,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <PanelLeft size={18} aria-hidden="true" />
                 </button>
                 <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label={t("sidebar.closeMenu")}>
-                  <X size={18} />
+                  <PanelLeft size={18} aria-hidden="true" />
                 </button>
               </div>
             </div>

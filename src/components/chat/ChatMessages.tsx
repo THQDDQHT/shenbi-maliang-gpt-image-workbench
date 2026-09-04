@@ -121,6 +121,12 @@ function referenceThumbnailUrl(message: Message) {
   return message.referenceImageThumbnailUrl ?? message.referenceImagePreviewUrl ?? message.referenceImageUrl ?? "";
 }
 
+function imagePreviewDescription(message: Message) {
+  const prompt = message.imageOriginPrompt?.trim() || message.imagePrompt?.trim() || "";
+  const displayPrompt = formatImageAnnotationMessageDisplayText(prompt, message.metadata).trim();
+  return displayPrompt || undefined;
+}
+
 function SharedResultImagePreview({
   messages,
   index,
@@ -144,7 +150,7 @@ function SharedResultImagePreview({
     .map((message, itemIndex) => ({
       id: message.imageId!,
       title: sharedTitle || message.content.trim() || t("chatMessages.viewNthImage", { index: itemIndex + 1 }),
-      description: message.imageOriginPrompt?.trim() || message.imagePrompt?.trim() || undefined,
+      description: imagePreviewDescription(message),
       imageUrl: message.imageUrl!,
       originalUrl: message.imageOriginalUrl ?? message.imagePreviewUrl ?? message.imageUrl!,
       previewUrl: message.imagePreviewUrl ?? message.imageUrl!,
@@ -167,6 +173,7 @@ function SharedResultImagePreview({
       wheelMode="pan"
       showItemThumbnails
       suppressStableScrollbarGutter
+      unifiedToolbarControls
       onIndexChange={onIndexChange}
       onClose={onClose}
       renderActions={(item) => (

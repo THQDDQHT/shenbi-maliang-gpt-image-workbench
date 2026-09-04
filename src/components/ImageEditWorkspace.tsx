@@ -18,6 +18,7 @@ import {
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
+import { resolveImageEditCount, resolveSelectedImageCount } from "../lib/imagePromptCount";
 import {
   REMOVE_SELECTED_AREA_PROMPT,
   formatImageAnnotationDisplayText,
@@ -57,6 +58,7 @@ export type ImageEditorState = {
   totalImageCount?: number;
   libraryContinuations?: ImageLibraryContinuations;
   initialPrompt?: string;
+  initialImageCount?: number;
   discardDraftOnClose?: boolean;
 };
 
@@ -67,6 +69,7 @@ type ImageEditWorkspaceProps = {
   totalImageCount?: number;
   downloadBaseName?: string;
   initialPrompt?: string;
+  initialImageCount?: number;
   sizeOptions: SizeOption[];
   selectedSize: string;
   isSubmitting: boolean;
@@ -81,12 +84,14 @@ type ImageEditWorkspaceProps = {
   onClose: () => void;
   onActiveImageChange?: (imageId: string) => void;
   onLoadMoreImages?: (direction: "newer" | "older") => void;
-  onPickSize: (image: WorkImage, option: SizeOption) => void;
+  onLockedRequest: () => void;
+  onPickSize: (image: WorkImage, option: SizeOption, imageCount: number) => void;
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
   onSubmitEdit: (payload: {
     image: WorkImage;
     prompt: string;
+    imageCount: number;
     editIntent?: ImageEditIntent;
     imageAnnotations?: Array<{ xPercent: number; yPercent: number; instruction: string }>;
     maskDataUrl?: string;
@@ -141,6 +146,7 @@ export function ImageEditWorkspace({
   totalImageCount,
   downloadBaseName,
   initialPrompt,
+  initialImageCount,
   sizeOptions,
   selectedSize,
   isSubmitting,
@@ -155,6 +161,7 @@ export function ImageEditWorkspace({
   onClose,
   onActiveImageChange,
   onLoadMoreImages,
+  onLockedRequest,
   onPickSize,
   onOpenCasePicker,
   onToggleMaterialPicker,
@@ -164,6 +171,7 @@ export function ImageEditWorkspace({
   const [activeId, setActiveId] = useState(activeImageId);
   const [mode, setMode] = useState<ImageEditIntent>("standard");
   const [prompt, setPrompt] = useState(() => formatImageAnnotationDisplayText(initialPrompt ?? ""));
+  const [imageCount, setImageCount] = useState(() => resolveSelectedImageCount(initialImageCount));
   const [brushSize, setBrushSize] = useState(80);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -223,6 +231,12 @@ export function ImageEditWorkspace({
   const selectionMode = mode === "remove";
   const annotationMode = mode === "annotation";
   const modeActive = mode !== "standard";
+  const effectiveImageCount = resolveImageEditCount(
+    prompt,
+    imageCount,
+    mode,
+    1 + selectedAssets.length + selectedCaseMaterials.length
+  );
 
   const activeImage = images.find((image) => image.id === activeId) ?? images[0];
   const activeIndex = Math.max(0, images.findIndex((image) => image.id === activeImage?.id));
@@ -633,6 +647,8 @@ export function ImageEditWorkspace({
 
   useEffect(() => setActiveId(activeImageId), [activeImageId]);
 
+  useEffect(() => setImageCount(resolveSelectedImageCount(initialImageCount)), [initialImageCount]);
+
   useEffect(() => {
     if (activeImage?.id) onActiveImageChange?.(activeImage.id);
   }, [activeImage?.id, onActiveImageChange]);
@@ -780,7 +796,7 @@ export function ImageEditWorkspace({
   }, [selectionMode, hasSelection, displaySize, naturalSize, strokes]);
 
   useEffect(() => {
-    if (!selectionMode || isSubmitting) return;
+    if (!selectionMode) return;
 
     function isTextInputTarget(target: EventTarget | null) {
       const element = target instanceof HTMLElement ? target : null;
@@ -798,14 +814,16 @@ export function ImageEditWorkspace({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSubmitting, selectionMode]);
+  }, [selectionMode]);
 
   useEffect(() => {
-    if (images.length <= 1 || modeActive || isSubmitting) return;
+    if (images.length <= 1 || modeActive) return;
 
     function isTypingTarget(target: EventTarget | null) {
       const element = target instanceof HTMLElement ? target : null;
-      return Boolean(element?.closest("input, textarea, select, [contenteditable='true'], .editor-size-picker"));
+      return Boolean(element?.closest(
+        "input, textarea, select, [contenteditable='true'], .editor-size-picker, .image-count-stepper, .image-count-menu"
+      ));
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -820,7 +838,7 @@ export function ImageEditWorkspace({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeIndex, images, isSubmitting, modeActive]);
+  }, [activeIndex, images, modeActive]);
 
   useEffect(() => {
     if (images.length <= 1 || modeActive) return;
@@ -851,9 +869,11 @@ export function ImageEditWorkspace({
     setActiveId(images[nextIndex].id);
   };
   const handleEditorWheel = (event: ReactWheelEvent<HTMLElement>) => {
-    if (images.length <= 1 || modeActive || isSubmitting) return;
+    if (images.length <= 1 || modeActive) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("input, textarea, select, [contenteditable='true'], .editor-size-picker, .material-picker")) return;
+    if (target?.closest(
+      "input, textarea, select, [contenteditable='true'], .editor-size-picker, .image-count-stepper, .image-count-menu, .material-picker"
+    )) return;
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
     if (Math.abs(delta) < 4) return;
     event.preventDefault();
@@ -866,7 +886,7 @@ export function ImageEditWorkspace({
     }, 180);
   };
   const handlePreviewWheel = (event: ReactWheelEvent<HTMLElement>) => {
-    if (modeActive || isSubmitting) return;
+    if (modeActive) return;
     event.preventDefault();
     event.stopPropagation();
     if (wheelMode === "zoom" || event.ctrlKey || event.metaKey) {
@@ -896,7 +916,7 @@ export function ImageEditWorkspace({
     });
   };
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (modeActive || isSubmitting || !canPreviewPan || event.button !== 0) return;
+    if (modeActive || !canPreviewPan || event.button !== 0) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target?.closest(".image-editor-canvas-wrap")) return;
     previewPointerStartedOnImageRef.current = true;
@@ -953,7 +973,7 @@ export function ImageEditWorkspace({
   const finishPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, true);
   const cancelPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, false);
   const handlePreviewClick = (event: ReactMouseEvent<HTMLElement>) => {
-    if (modeActive || isSubmitting) return;
+    if (modeActive) return;
     const startedOnImage = previewPointerStartedOnImageRef.current;
     previewPointerStartedOnImageRef.current = false;
     if (previewClickHandledRef.current) {
@@ -966,7 +986,7 @@ export function ImageEditWorkspace({
     else showPreviewOriginalSize();
   };
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (modeActive || isSubmitting || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
+    if (modeActive || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     previewNavigatorDragRef.current = event.pointerId;
@@ -1062,7 +1082,7 @@ export function ImageEditWorkspace({
     );
   };
   const handleAnnotationLayerClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!annotationMode || isSubmitting || event.target !== event.currentTarget) return;
+    if (!annotationMode || event.target !== event.currentTarget) return;
     event.preventDefault();
     event.stopPropagation();
     const point = annotationPointFromClient(event.clientX, event.clientY);
@@ -1071,7 +1091,7 @@ export function ImageEditWorkspace({
     setEditorError("");
   };
   const handleAnnotationPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, annotation: EditableImageAnnotation) => {
-    if (!annotationMode || isSubmitting || event.button !== 0) return;
+    if (!annotationMode || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     annotationDragRef.current = {
@@ -1133,7 +1153,7 @@ export function ImageEditWorkspace({
     }
   };
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!selectionMode || isSubmitting) return;
+    if (!selectionMode) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = updateBrushCursor(event.clientX, event.clientY);
@@ -1145,7 +1165,7 @@ export function ImageEditWorkspace({
     drawSelectionOverlay();
   };
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!selectionMode || isSubmitting) return;
+    if (!selectionMode) return;
     event.preventDefault();
     const point = updateBrushCursor(event.clientX, event.clientY);
     if (!pointerActiveRef.current || !point) return;
@@ -1170,7 +1190,7 @@ export function ImageEditWorkspace({
     drawSelectionOverlay();
   };
   const handleSelectionWheel = (event: ReactWheelEvent<HTMLCanvasElement>) => {
-    if (!selectionMode || isSubmitting) return;
+    if (!selectionMode) return;
     event.preventDefault();
     event.stopPropagation();
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
@@ -1204,7 +1224,6 @@ export function ImageEditWorkspace({
     drawSelectionOverlay();
   };
   const undoStroke = () => {
-    if (isSubmitting) return;
     setStrokes((current) => {
       const next = [...current];
       const removed = next.pop();
@@ -1215,7 +1234,6 @@ export function ImageEditWorkspace({
     requestAnimationFrame(drawSelectionOverlay);
   };
   const redoStroke = () => {
-    if (isSubmitting) return;
     setRedoStrokes((current) => {
       const next = [...current];
       const restored = next.pop();
@@ -1250,6 +1268,10 @@ export function ImageEditWorkspace({
     return canvas.toDataURL("image/png");
   };
   const submitFromEditor = () => {
+    if (isSubmitting) {
+      onLockedRequest();
+      return;
+    }
     const trimmedPrompt = prompt.trim();
     if (mode === "standard" && !trimmedPrompt) {
       setEditorError(t("imageEditor.error.promptRequired"));
@@ -1265,6 +1287,7 @@ export function ImageEditWorkspace({
       onSubmitEdit({
         image: activeImage,
         prompt: selectionMode ? REMOVE_SELECTED_AREA_PROMPT : trimmedPrompt,
+        imageCount,
         editIntent: mode,
         ...(annotationMode
           ? {
@@ -1319,9 +1342,10 @@ export function ImageEditWorkspace({
         onClose={onClose}
         onEnterMode={enterMode}
         onExitMode={exitMode}
+        onLockedRequest={onLockedRequest}
         onRemoveSubmit={submitFromEditor}
         onBrushPreviewChange={setBrushSizePreviewActive}
-        onPickSize={(option) => onPickSize(activeImage, option)}
+        onPickSize={(option) => onPickSize(activeImage, option, imageCount)}
         onPreviewOriginalSize={showPreviewOriginalSize}
         onPreviewReset={resetPreviewTransform}
         onPreviewRotateLeft={() => setPreviewRotation((value) => value - 90)}
@@ -1395,7 +1419,7 @@ export function ImageEditWorkspace({
                 onPointerMove={handlePointerMove}
                 onWheel={handleSelectionWheel}
                 onPointerEnter={(event) => {
-                  if (selectionMode && !isSubmitting) updateBrushCursor(event.clientX, event.clientY);
+                  if (selectionMode) updateBrushCursor(event.clientX, event.clientY);
                 }}
                 onPointerUp={() => finishStroke()}
                 onPointerCancel={() => finishStroke(true, false)}
@@ -1563,12 +1587,16 @@ export function ImageEditWorkspace({
         assets={assets}
         composerWrapRef={composerWrapRef}
         editorError={editorError}
+        effectiveImageCount={effectiveImageCount}
+        imageCount={imageCount}
         isSubmitting={isSubmitting}
         materialPickerOpen={materialPickerOpen}
         previews={editorComposerPreviews}
         prompt={prompt}
         selectedAssets={selectedAssets}
         onPromptChange={setPrompt}
+        onImageCountChange={setImageCount}
+        onLockedRequest={onLockedRequest}
         onClearAnnotations={clearAnnotations}
         onToggleAnnotationTooltips={() => setAnnotationTooltipsVisible((visible) => !visible)}
         onSelectedAssetsChange={setSelectedAssets}

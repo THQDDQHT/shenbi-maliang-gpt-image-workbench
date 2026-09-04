@@ -12,6 +12,13 @@ import { useI18n } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
+import {
+  IMAGE_PREVIEW_MOBILE_MAX_WIDTH,
+  resolveImagePreviewPinchPan,
+  resolveImagePreviewPinchZoom,
+  resolveImagePreviewSwipe,
+  type ImagePreviewPoint
+} from "../lib/imagePreviewSwipe";
 import type { CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageReferenceItem } from "../types";
 import { useToast } from "../ui";
 
@@ -139,8 +146,26 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const previewStageRef = useRef<HTMLDivElement | null>(null);
   const previewToolbarRef = useRef<HTMLDivElement | null>(null);
   const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number }; moved: boolean } | null>(null);
+  const previewSwipeRef = useRef<{
+    pointerId: number;
+    pointerType: string;
+    startX: number;
+    startY: number;
+    stageWidth: number;
+    moved: boolean;
+  } | null>(null);
+  const activePreviewTouchesRef = useRef(new Map<number, ImagePreviewPoint>());
+  const previewPinchRef = useRef<{
+    pointerIds: [number, number];
+    startDistance: number;
+    startZoom: number;
+    startPan: ImagePreviewPoint;
+    startMidpoint: ImagePreviewPoint;
+    stageCenter: ImagePreviewPoint;
+  } | null>(null);
   const previewNavigatorDragRef = useRef<number | null>(null);
   const previewClickHandledRef = useRef(false);
+  const previewTouchSuppressClickUntilRef = useRef(0);
   const previewPointerStartedOnImageRef = useRef(false);
   const previewUserAdjustedRef = useRef(false);
   const pendingOriginalPanRef = useRef(false);
@@ -374,7 +399,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewPan(applyStartPan ? previewDefaultPan : { x: 0, y: 0 });
     setPreviewDragging(false);
     previewDragRef.current = null;
+    previewSwipeRef.current = null;
+    previewPinchRef.current = null;
+    activePreviewTouchesRef.current.clear();
     previewNavigatorDragRef.current = null;
+    previewTouchSuppressClickUntilRef.current = 0;
   };
 
   const showPreviewOriginalSize = () => {
@@ -386,7 +415,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewPan(getPreviewStartPanWithCenteredXForZoom(1));
     setPreviewDragging(false);
     previewDragRef.current = null;
+    previewSwipeRef.current = null;
+    previewPinchRef.current = null;
+    activePreviewTouchesRef.current.clear();
     previewNavigatorDragRef.current = null;
+    previewTouchSuppressClickUntilRef.current = 0;
   };
 
   const adjustPreviewZoom = (delta: number) => {
@@ -450,10 +483,60 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   };
 
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!canPreviewPan || event.button !== 0) return;
+    if (event.button !== 0) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (!target?.closest(".case-preview-image")) return;
+    const mobileTouch = event.pointerType === "touch"
+      && window.innerWidth <= IMAGE_PREVIEW_MOBILE_MAX_WIDTH;
+    if (!target?.closest(".case-preview-image") && !(mobileTouch && activePreviewTouchesRef.current.size > 0)) return;
     previewPointerStartedOnImageRef.current = true;
+    if (mobileTouch) {
+      activePreviewTouchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (activePreviewTouchesRef.current.size >= 2) {
+        const touchEntries = Array.from(activePreviewTouchesRef.current.entries()).slice(0, 2);
+        const [firstPointerId, firstPoint] = touchEntries[0]!;
+        const [secondPointerId, secondPoint] = touchEntries[1]!;
+        const stageRect = event.currentTarget.getBoundingClientRect();
+        previewPinchRef.current = {
+          pointerIds: [firstPointerId, secondPointerId],
+          startDistance: Math.max(1, Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y)),
+          startZoom: previewZoom,
+          startPan: previewPan,
+          startMidpoint: {
+            x: (firstPoint.x + secondPoint.x) / 2,
+            y: (firstPoint.y + secondPoint.y) / 2
+          },
+          stageCenter: {
+            x: stageRect.left + stageRect.width / 2,
+            y: stageRect.top + stageRect.height / 2
+          }
+        };
+        previewSwipeRef.current = null;
+        previewDragRef.current = null;
+        setPreviewDragging(false);
+        previewUserAdjustedRef.current = true;
+        previewClickHandledRef.current = true;
+        event.preventDefault();
+        return;
+      }
+    }
+    const mobileTouchSwipe = !canPreviewPan
+      && mobileTouch
+      && event.isPrimary
+      && (hasPreviewPrev || hasPreviewNext);
+    if (mobileTouchSwipe) {
+      previewSwipeRef.current = {
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        startX: event.clientX,
+        startY: event.clientY,
+        stageWidth: event.currentTarget.clientWidth,
+        moved: false
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (!canPreviewPan) return;
     event.preventDefault();
     previewDragRef.current = {
       pointerId: event.pointerId,
@@ -466,6 +549,46 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   };
 
   const handlePreviewPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch" && activePreviewTouchesRef.current.has(event.pointerId)) {
+      activePreviewTouchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const pinch = previewPinchRef.current;
+      if (pinch?.pointerIds.includes(event.pointerId)) {
+        const firstPoint = activePreviewTouchesRef.current.get(pinch.pointerIds[0]);
+        const secondPoint = activePreviewTouchesRef.current.get(pinch.pointerIds[1]);
+        if (firstPoint && secondPoint) {
+          event.preventDefault();
+          const currentDistance = Math.hypot(secondPoint.x - firstPoint.x, secondPoint.y - firstPoint.y);
+          const nextZoom = resolveImagePreviewPinchZoom({
+            startZoom: pinch.startZoom,
+            startDistance: pinch.startDistance,
+            currentDistance,
+            minZoom: PREVIEW_MIN_ZOOM,
+            maxZoom: PREVIEW_MAX_ZOOM
+          });
+          const currentMidpoint = {
+            x: (firstPoint.x + secondPoint.x) / 2,
+            y: (firstPoint.y + secondPoint.y) / 2
+          };
+          setPreviewZoom(nextZoom);
+          setPreviewPan(resolveImagePreviewPinchPan({
+            startPan: pinch.startPan,
+            startMidpoint: pinch.startMidpoint,
+            currentMidpoint,
+            stageCenter: pinch.stageCenter,
+            zoomRatio: pinch.startZoom > 0 ? nextZoom / pinch.startZoom : 1
+          }));
+          return;
+        }
+      }
+    }
+    const swipe = previewSwipeRef.current;
+    if (swipe?.pointerId === event.pointerId) {
+      const deltaX = event.clientX - swipe.startX;
+      const deltaY = event.clientY - swipe.startY;
+      if (!swipe.moved && Math.hypot(deltaX, deltaY) >= 4) swipe.moved = true;
+      if (Math.abs(deltaX) > Math.abs(deltaY)) event.preventDefault();
+      return;
+    }
     const drag = previewDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
@@ -505,9 +628,78 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       previewPointerStartedOnImageRef.current = false;
     }, 250);
   };
-  const finishPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, true);
-  const cancelPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, false);
+  const releasePreviewPinch = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch") activePreviewTouchesRef.current.delete(event.pointerId);
+    const pinch = previewPinchRef.current;
+    if (!pinch || !pinch.pointerIds.includes(event.pointerId)) return false;
+    previewPinchRef.current = null;
+    previewSwipeRef.current = null;
+    previewDragRef.current = null;
+    activePreviewTouchesRef.current.clear();
+    setPreviewDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    previewClickHandledRef.current = true;
+    previewTouchSuppressClickUntilRef.current = Date.now() + 400;
+    window.setTimeout(() => {
+      previewClickHandledRef.current = false;
+      previewPointerStartedOnImageRef.current = false;
+    }, 250);
+    return true;
+  };
+  const releasePreviewSwipe = (event: ReactPointerEvent<HTMLDivElement>, navigate: boolean) => {
+    if (event.pointerType === "touch") activePreviewTouchesRef.current.delete(event.pointerId);
+    const swipe = previewSwipeRef.current;
+    if (!swipe || swipe.pointerId !== event.pointerId) return false;
+    previewSwipeRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    const moved = swipe.moved || Math.hypot(deltaX, deltaY) >= 4;
+    if (navigate) {
+      const direction = resolveImagePreviewSwipe({
+        pointerType: swipe.pointerType,
+        viewportWidth: window.innerWidth,
+        stageWidth: swipe.stageWidth,
+        deltaX,
+        deltaY,
+        canPan: canPreviewPan,
+        canNavigatePrevious: hasPreviewPrev,
+        canNavigateNext: hasPreviewNext
+      });
+      if (direction < 0) {
+        if (onNavigatePrevious) onNavigatePrevious();
+        else onIndexChange((index - 1 + items.length) % items.length);
+      } else if (direction > 0) {
+        if (onNavigateNext) onNavigateNext();
+        else onIndexChange((index + 1) % items.length);
+      }
+    }
+    if (moved) {
+      previewClickHandledRef.current = true;
+      previewTouchSuppressClickUntilRef.current = Date.now() + 400;
+    }
+    window.setTimeout(() => {
+      previewClickHandledRef.current = false;
+      previewPointerStartedOnImageRef.current = false;
+    }, 250);
+    return true;
+  };
+  const finishPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (releasePreviewPinch(event)) return;
+    if (releasePreviewSwipe(event, true)) return;
+    releasePreviewDrag(event, true);
+  };
+  const cancelPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (releasePreviewPinch(event)) return;
+    if (releasePreviewSwipe(event, false)) return;
+    releasePreviewDrag(event, false);
+  };
   const handlePreviewClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (Date.now() < previewTouchSuppressClickUntilRef.current) return;
     const startedOnImage = previewPointerStartedOnImageRef.current;
     previewPointerStartedOnImageRef.current = false;
     if (previewClickHandledRef.current) {
@@ -570,8 +762,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewImageSource(defaultPreviewImageSource);
     setPreviewLoadedSrc("");
     previewDragRef.current = null;
+    previewSwipeRef.current = null;
+    previewPinchRef.current = null;
+    activePreviewTouchesRef.current.clear();
     previewNavigatorDragRef.current = null;
     previewClickHandledRef.current = false;
+    previewTouchSuppressClickUntilRef.current = 0;
     previewPointerStartedOnImageRef.current = false;
     pendingOriginalPanRef.current = initialZoomMode === "actual";
     setPreviewImageSize(
@@ -739,6 +935,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           canNext={hasPreviewNext}
           canPan={canPreviewPan}
           canPrev={hasPreviewPrev}
+          touchGestures
           imageSize={previewImageSize}
           imageSrc={previewImageSrc}
           imageStyle={previewImageStyle}

@@ -2343,6 +2343,11 @@
   padding-inline: 10px 8px;
 }
 
+.image-count-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .quality-picker-trigger {
   min-width: 84px;
   justify-content: center;

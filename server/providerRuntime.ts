@@ -19,7 +19,7 @@ import {
   CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR,
   resolveChatGptWebImageQuotaOrder
 } from "./chatGptWebImageRequest";
-import { injectImageBackgroundInstruction } from "../src/lib/imageBackground";
+import { INHERITED_SOURCE_BACKGROUND_REQUEST_KEY, injectImageBackgroundInstruction } from "../src/lib/imageBackground";
 import { configDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
 import { ROOT } from "./paths";
@@ -3196,6 +3196,8 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
     ...payload,
     model: String(provider.model || "").trim() || DEFAULT_IMAGE_MODEL
   };
+  const inheritedSourceBackground = nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY] === true;
+  delete nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY];
   if (isGptImage2Family(nextPayload.model)) {
     delete nextPayload.input_fidelity;
   }
@@ -3211,7 +3213,7 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
     delete nextPayload.webConversationContext;
     delete nextPayload.editIntent;
   }
-  nextPayload.prompt = injectImageBackgroundInstruction(nextPayload.prompt, nextPayload.background);
+  nextPayload.prompt = injectImageBackgroundInstruction(nextPayload.prompt, nextPayload.background, inheritedSourceBackground);
   return injectAspectRatioInstruction(nextPayload);
 }
 

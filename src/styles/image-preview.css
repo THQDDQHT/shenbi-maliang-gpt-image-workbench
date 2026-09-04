@@ -423,6 +423,10 @@ img.image-alpha-checkerboard {
   -webkit-backdrop-filter: blur(16px);
 }
 
+.case-preview-wheel-zoom-hint.is-touch-hint {
+  display: none;
+}
+
 .case-preview-item-thumbs {
   --preview-item-thumb-window-size: 56px;
   --preview-item-thumb-image-size: 46px;

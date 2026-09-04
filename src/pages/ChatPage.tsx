@@ -38,7 +38,7 @@ import {
   imageBackgroundRequestOptionsFromMetadata,
   type ImageBackgroundOption
 } from "../lib/imageBackground";
-import { resolvePromptImageCount, resolveSelectedImageCount } from "../lib/imagePromptCount";
+import { resolveImageEditCount, resolvePromptImageCount, resolveSelectedImageCount } from "../lib/imagePromptCount";
 import {
   REMOVE_SELECTED_AREA_PROMPT,
   formatImageAnnotationDisplayText,
@@ -1244,18 +1244,23 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     if (!matchingJob || matchingJob.status === "running") return;
     setPendingEditorCancellationReturn(null);
   }, [imageJobs, pendingEditorCancellationReturn, setPendingEditorCancellationReturn]);
-  const hasDraftCreatedWhileRunning = (snapshot: SubmittedDraftSnapshot) => Boolean(
-    draftPrompt.trim()
-    || editImage
-    || selectedCaseMaterials.length > 0
-    || selectedAssets.length > 0
-    || size
-    || background !== "auto"
-    || imageCount !== snapshot.imageCount
-    || currentPromptInputOptimizeStyle !== "standard"
-    || currentPromptColorSchemeIds.length > 0
-    || currentPromptColorSchemeInjection.trim()
-  );
+  const hasDraftCreatedWhileRunning = (snapshot: SubmittedDraftSnapshot) => {
+    const backgroundChanged = snapshot.editorReturn
+      ? background !== snapshot.background
+      : background !== "auto";
+    return Boolean(
+      draftPrompt.trim()
+      || editImage
+      || selectedCaseMaterials.length > 0
+      || selectedAssets.length > 0
+      || size
+      || backgroundChanged
+      || imageCount !== snapshot.imageCount
+      || currentPromptInputOptimizeStyle !== "standard"
+      || currentPromptColorSchemeIds.length > 0
+      || currentPromptColorSchemeInjection.trim()
+    );
+  };
   const cancelCurrentSubmit = async () => {
     const target = currentCancelTarget;
     if (!target || cancelPending) return;
@@ -1835,7 +1840,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     sourceAssetIds: string[] = [],
     sourceCaseItemIds: string[] = [],
     editIntent: ImageEditIntent = "standard",
-    imageAnnotations: ImageAnnotation[] = []
+    imageAnnotations: ImageAnnotation[] = [],
+    requestedImageCount: number = 1
   ) => {
     const trimmedPrompt = prompt.trim();
     const displayedPrompt = editIntent === "annotation"
@@ -1844,12 +1850,20 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         ? REMOVE_SELECTED_AREA_PROMPT
         : trimmedPrompt;
     if (currentScopeBusy || !displayedPrompt) return;
-    const resolvedImageCount = editIntent === "annotation"
-      ? resolvePromptImageCount(trimmedPrompt, resolveSelectedImageCount(imageCount))
-      : resolvePromptImageCount(displayedPrompt, imageCount);
+    const selectedEditImageCount = resolveSelectedImageCount(requestedImageCount);
+    const sourceInputCount = 1 + sourceAssetIds.length + sourceCaseItemIds.length;
+    const resolvedImageCount = resolveImageEditCount(
+      editIntent === "annotation" ? trimmedPrompt : displayedPrompt,
+      selectedEditImageCount,
+      editIntent,
+      sourceInputCount
+    );
     const effectiveSize = requestSize ?? size;
     const selectedRequestSize = requestSizeFromSelection(effectiveSize);
-    const backgroundRequestOptions = imageBackgroundRequestOptions(background);
+    // The full-screen editor has no background control. Let the server derive
+    // the edit background from the source image instead of reusing a hidden
+    // value from the chat composer.
+    const backgroundRequestOptions = imageBackgroundRequestOptions("auto");
     const sourceAssetIdSet = new Set(sourceAssetIds);
     const sourceCaseItemIdSet = new Set(sourceCaseItemIds);
     const selectedCaseReferences = selectedCaseMaterials.filter((item) => sourceCaseItemIdSet.has(item.caseItemId)).map(sourceReferenceFromCaseMaterial);
@@ -1867,6 +1881,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       totalImageCount: imageEditor.totalImageCount,
       libraryContinuations: imageEditor.libraryContinuations,
       initialPrompt: trimmedPrompt,
+      initialImageCount: selectedEditImageCount,
       preserveSelectedAssets: true,
       persistAcrossSessionChange: true,
       discardDraftOnClose: true
@@ -1942,13 +1957,11 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     });
     closePagedImageEditor();
     setDraftPrompt("");
-    setImageCount(1);
     setEditImage(null);
     setSelectedAssets([]);
     setSelectedCaseMaterials([]);
     setMaterialPickerOpen(false);
     setSize("");
-    setBackground("auto");
     resetPromptInputOptimizeStyle();
     resetPromptColorScheme();
     startTrackedSubmit({
@@ -1971,8 +1984,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       ...branchFields
     }, submittedSnapshot);
   };
-  const sendAspectRatioEdit = (image: WorkImage, option: SizeOption) => {
-    sendEditRequest(image, `将宽高比设为 ${option.ratio}`, undefined, option.value);
+  const sendAspectRatioEdit = (image: WorkImage, option: SizeOption, requestedImageCount: number) => {
+    sendEditRequest(image, `将宽高比设为 ${option.ratio}`, undefined, option.value, [], [], "standard", [], requestedImageCount);
   };
   const submitMessageEdit = (payload: {
     rootId: string;
@@ -2381,6 +2394,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           downloadBaseName={sessionActions?.title}
           activeImageId={imageEditor.activeImageId}
           initialPrompt={imageEditor.initialPrompt}
+          initialImageCount={imageEditor.initialImageCount}
           sizeOptions={sizeOptions}
           selectedSize=""
           isSubmitting={currentViewSubmitting}
@@ -2398,9 +2412,10 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             setCasePickerOpen(true);
           }}
           onClose={handleCloseImageEditor}
+          onLockedRequest={() => showToast(t("imageEditor.requestLocked"), "info")}
           onPickSize={sendAspectRatioEdit}
           onToggleMaterialPicker={() => setMaterialPickerOpen(!materialPickerOpen)}
-          onSubmitEdit={({ image, prompt, editIntent, imageAnnotations, maskDataUrl, sourceAssetIds, sourceCaseItemIds }) =>
+          onSubmitEdit={({ image, prompt, imageCount: editorImageCount, editIntent, imageAnnotations, maskDataUrl, sourceAssetIds, sourceCaseItemIds }) =>
             sendEditRequest(
               image,
               prompt,
@@ -2409,7 +2424,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
               sourceAssetIds ?? assetIdsForRequest(selectedAssets),
               sourceCaseItemIds ?? selectedCaseMaterials.map((item) => item.caseItemId),
               editIntent ?? "standard",
-              imageAnnotations ?? []
+              imageAnnotations ?? [],
+              editorImageCount
             )
           }
         />

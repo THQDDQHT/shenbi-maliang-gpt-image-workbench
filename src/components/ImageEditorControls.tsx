@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
-import { EditorSizePicker } from "./ImageOptionPickers";
+import { EditorSizePicker, ImageCountStepper } from "./ImageOptionPickers";
 import { ImageZoomSlider } from "./ImageZoomSlider";
 import { MaterialPickerDrawer } from "./MaterialPicker";
 import { CheckerboardImage } from "./CheckerboardImage";
@@ -72,6 +72,7 @@ type ImageEditorTopbarProps = {
   onClose: () => void;
   onEnterMode: (mode: "annotation" | "remove") => void;
   onExitMode: () => void;
+  onLockedRequest: () => void;
   onRemoveSubmit: () => void;
   onBrushPreviewChange: (active: boolean) => void;
   onPickSize: (option: SizeOption) => void;
@@ -111,6 +112,7 @@ export function ImageEditorTopbar({
   onClose,
   onEnterMode,
   onExitMode,
+  onLockedRequest,
   onRemoveSubmit,
   onBrushPreviewChange,
   onPickSize,
@@ -145,13 +147,13 @@ export function ImageEditorTopbar({
       </div>
       {!modeActive && showPreviewControls ? (
         <div className="image-editor-preview-tools" aria-label={t("imagePreview.tools")}>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateLeft} disabled={isSubmitting} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateLeft} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
             <RotateCcw size={20} />
           </button>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateRight} disabled={isSubmitting} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateRight} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
             <RotateCw size={20} />
           </button>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomOut} disabled={isSubmitting} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomOut} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
             <ZoomOut size={20} />
           </button>
           <ImageZoomSlider
@@ -159,17 +161,15 @@ export function ImageEditorTopbar({
             max={previewZoomMax ?? 300}
             value={previewZoomValue ?? 100}
             label={previewZoomLabel ?? "100%"}
-            disabled={isSubmitting}
             onChange={(value) => onPreviewZoomChange?.(value)}
           />
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomIn} disabled={isSubmitting} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomIn} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
             <ZoomIn size={20} />
           </button>
           <button
             type="button"
             className="image-editor-preview-tool"
             onClick={previewResetActive ? onPreviewReset : onPreviewOriginalSize}
-            disabled={isSubmitting}
             aria-label={previewResetActive
               ? t("imagePreview.reset")
               : previewOriginalSizeLabel
@@ -187,13 +187,13 @@ export function ImageEditorTopbar({
       ) : null}
       {removeMode ? (
         <div className="image-editor-actions">
-          <button type="button" className="editor-icon-btn" onClick={onUndoStroke} disabled={strokeCount === 0 || isSubmitting} aria-label={t("imageEditor.undo")}>
+          <button type="button" className="editor-icon-btn" onClick={onUndoStroke} disabled={strokeCount === 0} aria-label={t("imageEditor.undo")}>
             <Undo2 size={20} />
           </button>
-          <button type="button" className="editor-icon-btn" onClick={onRedoStroke} disabled={redoStrokeCount === 0 || isSubmitting} aria-label={t("imageEditor.redo")}>
+          <button type="button" className="editor-icon-btn" onClick={onRedoStroke} disabled={redoStrokeCount === 0} aria-label={t("imageEditor.redo")}>
             <Redo2 size={20} />
           </button>
-          <button type="button" className="editor-icon-btn" onClick={onClearSelection} disabled={!hasSelection || isSubmitting} aria-label={t("common.clear")}>
+          <button type="button" className="editor-icon-btn" onClick={onClearSelection} disabled={!hasSelection} aria-label={t("common.clear")}>
             <Trash2 size={20} />
           </button>
           <label className="brush-size-control">
@@ -201,7 +201,7 @@ export function ImageEditorTopbar({
               type="button"
               className="brush-step-btn"
               onClick={() => onAdjustBrushSize(-BRUSH_SIZE_STEP)}
-              disabled={brushSize <= BRUSH_MIN_SIZE || isSubmitting}
+              disabled={brushSize <= BRUSH_MIN_SIZE}
               aria-label={t("imageEditor.decreaseBrush")}
             >
               <Minus size={20} />
@@ -225,37 +225,43 @@ export function ImageEditorTopbar({
               type="button"
               className="brush-step-btn"
               onClick={() => onAdjustBrushSize(BRUSH_SIZE_STEP)}
-              disabled={brushSize >= BRUSH_MAX_SIZE || isSubmitting}
+              disabled={brushSize >= BRUSH_MAX_SIZE}
               aria-label={t("imageEditor.increaseBrush")}
             >
               <Plus size={20} />
             </button>
             <span>{brushSize}px</span>
           </label>
-          <button type="button" className="editor-primary-btn" onClick={onRemoveSubmit} disabled={!hasSelection || isSubmitting}>
+          <button
+            type="button"
+            className="editor-primary-btn"
+            onClick={isSubmitting ? onLockedRequest : onRemoveSubmit}
+            disabled={!hasSelection}
+            aria-disabled={isSubmitting}
+          >
             {t("composer.send")}
           </button>
-          <button type="button" className="editor-text-btn" onClick={onExitMode} disabled={isSubmitting}>
+          <button type="button" className="editor-text-btn" onClick={onExitMode}>
             {t("common.cancel")}
           </button>
         </div>
       ) : annotationMode ? (
         <div className="image-editor-actions">
-          <button type="button" className="editor-text-btn" onClick={onExitMode} disabled={isSubmitting}>
+          <button type="button" className="editor-text-btn" onClick={onExitMode}>
             {t("common.cancel")}
           </button>
         </div>
       ) : (
         <div className="image-editor-actions">
-          <button type="button" className="editor-text-btn" onClick={() => onEnterMode("annotation")} disabled={isSubmitting}>
+          <button type="button" className="editor-text-btn" onClick={() => onEnterMode("annotation")}>
             <MessageCirclePlus size={20} />
             {t("imageEditor.annotation")}
           </button>
-          <button type="button" className="editor-text-btn" onClick={() => onEnterMode("remove")} disabled={isSubmitting}>
+          <button type="button" className="editor-text-btn" onClick={() => onEnterMode("remove")}>
             <Eraser size={20} />
             {t("imageEditor.remove")}
           </button>
-          <EditorSizePicker value={selectedSize} options={sizeOptions} onSelect={onPickSize} />
+          <EditorSizePicker value={selectedSize} options={sizeOptions} disabled={isSubmitting} onDisabledClick={onLockedRequest} onSelect={onPickSize} />
           <ImageDownloadMenu
             source={{ type: "image", id: activeImage.id, downloadBaseName }}
             className="editor-round-btn"
@@ -344,12 +350,16 @@ type ImageEditorComposerProps = {
   assets?: { assets: AssetItem[] };
   composerWrapRef?: RefObject<HTMLElement | null>;
   editorError: string;
+  effectiveImageCount: number;
+  imageCount: number;
   isSubmitting: boolean;
   materialPickerOpen: boolean;
   previews: EditorComposerPreview[];
   prompt: string;
   selectedAssets: AssetItem[];
   onPromptChange: (value: string) => void;
+  onImageCountChange: (value: number) => void;
+  onLockedRequest: () => void;
   onClearAnnotations: () => void;
   onToggleAnnotationTooltips: () => void;
   onSelectedAssetsChange: (assets: AssetItem[]) => void;
@@ -366,12 +376,16 @@ export function ImageEditorComposer({
   assets,
   composerWrapRef,
   editorError,
+  effectiveImageCount,
+  imageCount,
   isSubmitting,
   materialPickerOpen,
   previews,
   prompt,
   selectedAssets,
   onPromptChange,
+  onImageCountChange,
+  onLockedRequest,
   onClearAnnotations,
   onToggleAnnotationTooltips,
   onSelectedAssetsChange,
@@ -437,6 +451,11 @@ export function ImageEditorComposer({
   return (
     <footer ref={composerWrapRef} className="image-editor-composer-wrap">
       {editorError ? <div className="form-error">{editorError}</div> : null}
+      {effectiveImageCount !== imageCount ? (
+        <div className="image-editor-count-notice" role="status">
+          {t("imageEditor.imageCountOverride", { count: effectiveImageCount })}
+        </div>
+      ) : null}
       <form
         className={cx(
           "image-editor-composer",
@@ -444,7 +463,14 @@ export function ImageEditorComposer({
           annotationMode && "is-annotation",
           annotationMode && annotationCount > 0 && "has-annotations"
         )}
-        onSubmit={onSubmit}
+        onSubmit={(event) => {
+          if (isSubmitting) {
+            event.preventDefault();
+            onLockedRequest();
+            return;
+          }
+          onSubmit(event);
+        }}
       >
         {annotationMode && annotationCount > 0 ? (
           <div className="image-editor-annotation-summary">
@@ -460,7 +486,6 @@ export function ImageEditorComposer({
             <button
               type="button"
               className="image-editor-annotation-clear"
-              disabled={isSubmitting}
               aria-label={t("imageEditor.clearAnnotations")}
               title={t("imageEditor.clearAnnotations")}
               onClick={onClearAnnotations}
@@ -513,6 +538,7 @@ export function ImageEditorComposer({
               </div>
             ) : null}
           </div>
+          <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
         </div>
         <input
           value={prompt}
@@ -520,7 +546,13 @@ export function ImageEditorComposer({
           onFocus={focusEditorInput}
           placeholder={annotationMode ? t("imageEditor.annotationExtraPlaceholder") : t("imageEditor.promptPlaceholder")}
         />
-        <button type="submit" className="editor-send-btn" disabled={isSubmitting || (annotationMode ? annotationCount === 0 : !prompt.trim())} aria-label={t("composer.send")}>
+        <button
+          type="submit"
+          className="editor-send-btn"
+          disabled={annotationMode ? annotationCount === 0 : !prompt.trim()}
+          aria-disabled={isSubmitting}
+          aria-label={t("composer.send")}
+        >
           <ArrowUp size={22} />
         </button>
       </form>

@@ -61,6 +61,7 @@ export async function runImageCompletion<TItem, TResult>({
   existingImageCount = 0,
   existingImageIndexes,
   concurrency = 1,
+  sharedRequestMode = "batch",
   requestBatch,
   commitBatch,
   discardItems
@@ -70,6 +71,7 @@ export async function runImageCompletion<TItem, TResult>({
   existingImageCount?: number;
   existingImageIndexes?: number[];
   concurrency?: number;
+  sharedRequestMode?: "batch" | "single";
   requestBatch: (request: ImageCompletionBatchRequest) => Promise<ImageCompletionBatch<TItem, TResult>>;
   commitBatch: (batch: ImageCompletionBatchCommit<TItem, TResult>) => Promise<void>;
   discardItems?: (items: TItem[]) => Promise<void>;
@@ -116,7 +118,7 @@ export async function runImageCompletion<TItem, TResult>({
     results.push(result.result);
   };
 
-  if (plan.mode !== "grouped") {
+  if (plan.mode !== "grouped" && sharedRequestMode === "batch") {
     const initialMissingIndexes = missingIndexes();
     if (initialMissingIndexes.length > 0) {
       roundIndex += 1;

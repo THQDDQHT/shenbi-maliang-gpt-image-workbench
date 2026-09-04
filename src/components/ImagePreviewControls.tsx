@@ -30,6 +30,7 @@ type ImagePreviewStageProps = {
   canNext: boolean;
   canPan: boolean;
   canPrev: boolean;
+  touchGestures: boolean;
   imageSrc: string;
   imageSize: { width: number; height: number } | null;
   imageStyle: CSSProperties;
@@ -61,6 +62,7 @@ export function ImagePreviewStage({
   canNext,
   canPan,
   canPrev,
+  touchGestures,
   imageSrc,
   imageSize,
   imageStyle,
@@ -92,7 +94,7 @@ export function ImagePreviewStage({
   const zoomModifier = /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘" : "Ctrl";
   return (
     <div
-      className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewUsesHandCursor && "is-zoomed", previewDragging && "is-dragging")}
+      className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", touchGestures && "has-touch-gestures", previewUsesHandCursor && "is-zoomed", previewDragging && "is-dragging")}
       ref={stageRef}
       onClick={onClick}
       onPointerDown={onPointerDown}
@@ -162,8 +164,13 @@ export function ImagePreviewStage({
             </div>
           </div>
           {showWheelZoomHint ? (
-            <span className="case-preview-wheel-zoom-hint">
+            <span className="case-preview-wheel-zoom-hint is-desktop-hint">
               {t("imagePreview.wheelZoomHint", { modifier: zoomModifier })}
+            </span>
+          ) : null}
+          {touchGestures ? (
+            <span className="case-preview-wheel-zoom-hint is-touch-hint">
+              {t("imagePreview.pinchZoomHint")}
             </span>
           ) : null}
         </div>

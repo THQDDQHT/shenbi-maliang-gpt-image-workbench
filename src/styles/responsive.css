@@ -181,8 +181,9 @@
   }
 
   .shared-conversation-topbar {
-    min-height: 58px;
-    padding: 9px 10px 9px 58px;
+    top: 0;
+    min-height: 64px;
+    padding: 12px 10px 12px 62px;
   }
 
   .shared-message-area {
@@ -196,6 +197,7 @@
   .shared-conversation-heading h1 {
     max-width: 34vw;
     font-size: 14px;
+    line-height: 1.25;
   }
 
   .shared-auth-actions {
@@ -401,6 +403,22 @@
   .archived-chat-row > span:nth-child(2) {
     display: none;
   }
+
+  .case-preview-stage.has-touch-gestures {
+    touch-action: none;
+  }
+
+  .case-preview-wheel-zoom-hint.is-desktop-hint {
+    display: none;
+  }
+
+  .case-preview-wheel-zoom-hint.is-touch-hint {
+    display: block;
+  }
+
+  .case-preview-transform-tools > .image-zoom-slider {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -518,6 +536,31 @@
   .case-preview-transform-tools {
     width: 100%;
     justify-content: center;
+  }
+
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) {
+    min-height: 132px;
+    gap: 8px;
+    padding-top: 8px;
+  }
+
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) .case-preview-control-row {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) .case-preview-actions,
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) .case-preview-transform-tools {
+    width: auto;
+  }
+
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) .case-preview-transform-tools {
+    gap: 5px;
+  }
+
+  .case-preview-toolbar:has(.case-preview-actions > .image-download-menu:only-child):not(:has(.case-preview-references)) .case-preview-tool {
+    width: 34px;
+    height: 34px;
   }
 
   .case-preview-references {

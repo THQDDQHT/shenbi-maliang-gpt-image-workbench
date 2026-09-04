@@ -868,8 +868,39 @@
 
 @media (max-width: 900px) {
   .login-page {
+    --login-field-bg: rgba(255, 253, 248, 0.44);
+    --login-field-bg-focus: rgba(255, 253, 248, 0.56);
+    --login-autofill-bg: rgba(255, 253, 248, 0.56);
+    --login-button-bg:
+      linear-gradient(180deg, rgba(255, 253, 248, 0.48), rgba(255, 253, 248, 0.34)),
+      var(--login-field-bg);
+    --login-button-hover-bg:
+      linear-gradient(180deg, rgba(255, 253, 248, 0.58), rgba(255, 253, 248, 0.42)),
+      var(--login-field-bg-focus);
+    --login-error-bg:
+      linear-gradient(180deg, rgba(255, 253, 248, 0.42), rgba(255, 253, 248, 0.30)),
+      var(--login-field-bg);
+    --login-switch-bg: rgba(255, 253, 248, 0.42);
+    --login-switch-active-bg: rgba(255, 253, 248, 0.62);
     place-items: center;
     padding: 24px 18px max(28px, env(safe-area-inset-bottom));
+  }
+
+  .login-page.login-theme-dark {
+    --login-field-bg: rgba(20, 31, 41, 0.50);
+    --login-field-bg-focus: rgba(30, 43, 54, 0.60);
+    --login-autofill-bg: rgba(30, 43, 54, 0.60);
+    --login-button-bg:
+      linear-gradient(180deg, rgba(224, 190, 126, 0.20), rgba(224, 190, 126, 0.10)),
+      var(--login-field-bg);
+    --login-button-hover-bg:
+      linear-gradient(180deg, rgba(224, 190, 126, 0.26), rgba(224, 190, 126, 0.14)),
+      var(--login-field-bg-focus);
+    --login-error-bg:
+      linear-gradient(180deg, rgba(224, 190, 126, 0.18), rgba(224, 190, 126, 0.08)),
+      var(--login-field-bg);
+    --login-switch-bg: rgba(20, 31, 41, 0.48);
+    --login-switch-active-bg: rgba(224, 190, 126, 0.28);
   }
 
   .login-background-layer img,
@@ -904,6 +935,16 @@
     border-radius: 0;
     padding: 0 12px;
     transform: none;
+  }
+
+  .login-mode-tabs,
+  .login-channel-tabs,
+  .login-input-shell,
+  .login-code-status,
+  .login-submit.primary-btn,
+  .login-form .form-error {
+    backdrop-filter: blur(10px) saturate(1.08);
+    -webkit-backdrop-filter: blur(10px) saturate(1.08);
   }
 
   .login-form {

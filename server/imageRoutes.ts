@@ -35,6 +35,7 @@ import {
 import { saveImageEditMaskDebugArtifacts } from "./imageEditDebug";
 import { imageEditMaskSnapshotDataUrl, normalizeImageEditMaskDataUrl, requireImageEditMaskSnapshot } from "./imageMasks";
 import { readImageDimensions } from "./imageDimensions";
+import { detectImageTransparency } from "./imageTransparency";
 import {
   messageSourceReferencesByIds,
   publicMessageSourceReference,
@@ -49,6 +50,7 @@ import { providerResponseSnapshot } from "./responseSnapshots";
 import { reviewConversationPrompt } from "./safetyReview";
 import {
   fallbackImagePromptPlan,
+  imageEditPromptHasExplicitGroups,
   resolveImagePromptPlan,
   storedImagePromptPlan,
   type ImagePromptPlan
@@ -91,9 +93,12 @@ import {
 } from "./chatStore";
 import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 import { finalizeProviderEditPrompt, normalizeImageEditRequest } from "./imageEditRequest";
-import { resolvePromptImageCount, resolveSelectedImageCount } from "../src/lib/imagePromptCount";
+import { resolveImageEditCount, resolvePromptImageCount } from "../src/lib/imagePromptCount";
 import type { ImageEditIntent } from "../src/lib/imageAnnotations";
 import {
+  INHERITED_SOURCE_BACKGROUND_REQUEST_KEY,
+  inheritSourceImageBackgroundOptions,
+  imageEditPromptRequestsNonTransparentBackground,
   isImageBackgroundOption,
   type ImageBackgroundOption,
   type TransparentImageOutputFormat
@@ -110,6 +115,37 @@ function providerPrompt(prompt: string, imageCount: number) {
 
 const IMAGE_PROMPT_PLAN_REQUEST_KEY = "_imagePromptPlan";
 const IMAGE_COMPLETION_CONCURRENCY_REQUEST_KEY = "_multiImageConcurrency";
+const IMAGE_EDIT_SOURCE_TRANSPARENCY_CACHE_LIMIT = 512;
+const imageEditSourceTransparencyCache = new Map<string, Promise<boolean>>();
+
+function imageBufferFromDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:[^,]*?(;base64)?,(.*)$/s);
+  if (!match) throw new Error("源图片数据格式不正确");
+  return match[1]
+    ? Buffer.from(match[2] ?? "", "base64")
+    : Buffer.from(decodeURIComponent(match[2] ?? ""));
+}
+
+async function sourceImageTransparency(imageId: string | undefined, dataUrl: string | undefined) {
+  if (!dataUrl) return false;
+  const cacheKey = String(imageId ?? "").trim();
+  if (cacheKey) {
+    const cached = imageEditSourceTransparencyCache.get(cacheKey);
+    if (cached) return cached;
+  }
+  const detection = detectImageTransparency(imageBufferFromDataUrl(dataUrl)).catch((error) => {
+    console.warn("识别编辑源图片透明背景失败，按自动背景继续", error);
+    return false;
+  });
+  if (cacheKey) {
+    imageEditSourceTransparencyCache.set(cacheKey, detection);
+    if (imageEditSourceTransparencyCache.size > IMAGE_EDIT_SOURCE_TRANSPARENCY_CACHE_LIMIT) {
+      const oldestKey = imageEditSourceTransparencyCache.keys().next().value;
+      if (oldestKey) imageEditSourceTransparencyCache.delete(oldestKey);
+    }
+  }
+  return detection;
+}
 
 function requestImagePromptPlan(requestPayload: Record<string, unknown>) {
   const imageCount = numberFromPayload(requestPayload.n, 1);
@@ -679,6 +715,7 @@ async function runProviderImageCompletion({
       existingImageCount,
       existingImageIndexes,
       concurrency,
+      sharedRequestMode: mode === "edit" ? "single" : "batch",
       requestBatch: async ({ prompt, imageCount, roundIndex }) => {
         if (signal?.aborted) throw new Error("图片任务已取消");
         const payload = {
@@ -1105,12 +1142,19 @@ async function ensureStoredImagePromptPlan({
   signal?: AbortSignal;
 }) {
   const imageCount = numberFromPayload(requestPayload.n, 1);
+  const editIntent = taskType === "edit" ? storedImageEditIntent(requestPayload.editIntent) : undefined;
+  const sourceInputCount = Array.isArray(requestPayload.images) ? requestPayload.images.length : 0;
   const existingPlan = requestImagePromptPlan(requestPayload);
-  if (existingPlan) return existingPlan;
+  const incompatibleStoredEditPlan = Boolean(
+    existingPlan?.mode === "grouped"
+    && taskType === "edit"
+    && !imageEditPromptHasExplicitGroups(prompt, editIntent, sourceInputCount)
+  );
+  if (existingPlan && !incompatibleStoredEditPlan) return existingPlan;
 
   const plan = existingImageCount > 0
     ? fallbackImagePromptPlan(imageCount, "兼容未保存提示词计划的历史部分结果")
-    : await resolveImagePromptPlan({ prompt, imageCount, taskType, userId, jobId, signal });
+    : await resolveImagePromptPlan({ prompt, imageCount, taskType, editIntent, sourceInputCount, userId, jobId, signal });
   assertImageJobExecutionIsActive(jobId, manualRetryCount, recoveryCount);
   const storedRequest = getOne<{ request_json: string | null }>(
     appDb,
@@ -1577,6 +1621,25 @@ async function runStoredImageJob({
       ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type))))
     ];
     if (imageUrls.length === 0) throw new Error("请选择要编辑的图片或素材");
+    const primarySourceImage = validSourceImages[0] ?? null;
+    const storedBackgroundValue = String(requestPayload.background ?? "").trim().toLowerCase();
+    const retryBackground = isImageBackgroundOption(storedBackgroundValue)
+      ? storedBackgroundValue
+      : undefined;
+    const storedInheritedSourceBackground = requestPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY] === true;
+    const promptRequestsNonTransparentBackground = imageEditPromptRequestsNonTransparentBackground(job.prompt);
+    const retrySourceImageTransparent = (!retryBackground || retryBackground === "auto" || storedInheritedSourceBackground)
+      ? await sourceImageTransparency(primarySourceImage?.id, imageUrls[0])
+      : false;
+    const storedOutputFormatValue = String(requestPayload.output_format ?? "").trim().toLowerCase();
+    const retryOutputFormat = storedOutputFormatValue === "png" || storedOutputFormatValue === "webp"
+      ? storedOutputFormatValue
+      : undefined;
+    const retryShouldInheritSourceBackground = retrySourceImageTransparent && !promptRequestsNonTransparentBackground;
+    const retryBackgroundOptions = inheritSourceImageBackgroundOptions({
+      ...(retryBackground ? { background: retryBackground } : {}),
+      ...(retryOutputFormat ? { output_format: retryOutputFormat } : {})
+    }, retryShouldInheritSourceBackground);
 
     const messageMetadata = jobUserMessageMetadata(job.user_id, retrySessionId, job.id);
     const maskWasRequested = Boolean(requestPayload.mask);
@@ -1591,15 +1654,21 @@ async function runStoredImageJob({
 
     const retryPayload: Record<string, unknown> = {
       ...requestPayload,
-      images: imageUrls.map((image_url) => ({ image_url }))
+      images: imageUrls.map((image_url) => ({ image_url })),
+      ...retryBackgroundOptions,
+      ...(retryShouldInheritSourceBackground ? { [INHERITED_SOURCE_BACKGROUND_REQUEST_KEY]: true } : {})
     };
+    if (storedInheritedSourceBackground && promptRequestsNonTransparentBackground) {
+      delete retryPayload.background;
+      delete retryPayload.output_format;
+      delete retryPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY];
+    }
     delete retryPayload.maskPath;
     delete retryPayload.debug;
     if (maskDataUrl) retryPayload.mask = maskDataUrl;
     else delete retryPayload.mask;
     const retryEditIntent = storedImageEditIntent(requestPayload.editIntent);
 
-    const primarySourceImage = validSourceImages[0] ?? null;
     const promptPlan = await ensureStoredImagePromptPlan({
       jobId: job.id,
       userId: job.user_id,
@@ -2546,9 +2615,17 @@ api.post("/images/edit", async (c) => {
   const provider = providers[0];
   const size = requestImageSize(body.size);
   const quality = requestImageQuality(body.quality, provider.default_quality);
-  const imageCount = editIntent === "annotation"
-    ? resolvePromptImageCount(extraPrompt, resolveSelectedImageCount(body.n ?? body.imageCount))
-    : resolvePromptImageCount(prompt, body.n ?? body.imageCount);
+  const sourceInputCount = sourceImageIds.length
+    + sourceAssetIds.length
+    + sourceCaseItemIds.length
+    + sourceReferenceIds.length
+    + sourceInlineImages.length;
+  const imageCount = resolveImageEditCount(
+    editIntent === "annotation" ? extraPrompt : prompt,
+    body.n ?? body.imageCount,
+    editIntent,
+    sourceInputCount
+  );
   const imageOptions = normalizedImageRequestOptions(body, true);
   if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
   const sourceImages = sourceImageIds.map((id) =>
@@ -2572,6 +2649,7 @@ api.post("/images/edit", async (c) => {
   const validSourceAssets = sourceAssets.filter(Boolean) as ImageReferenceSourceAsset[];
   const validSourceCases = sourceCases.filter(Boolean) as NonNullable<(typeof sourceCases)[number]>[];
   const validSourceReferences = sourceReferences.filter(Boolean) as NonNullable<(typeof sourceReferences)[number]>[];
+  const primarySourceImage = validSourceImages[0] ?? null;
   const sourceCaseReferences = validSourceCases.map(caseMaterialReferenceFromSource);
   const existingSourceReferences = validSourceReferences.map(publicMessageSourceReference);
   const imageReferenceSources = [
@@ -2588,6 +2666,13 @@ api.post("/images/edit", async (c) => {
     ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type)))),
     ...sourceInlineImages.map((item) => item.dataUrl)
   ];
+  const requestedBackground = imageOptions.payload.background;
+  const sourceImageTransparent = (!requestedBackground || requestedBackground === "auto")
+    ? await sourceImageTransparency(primarySourceImage?.id, imageUrls[0])
+    : false;
+  const shouldInheritSourceBackground = sourceImageTransparent
+    && !imageEditPromptRequestsNonTransparentBackground(prompt);
+  const resolvedImageOptions = inheritSourceImageBackgroundOptions(imageOptions.payload, shouldInheritSourceBackground);
   if (rawMaskDataUrl) {
     try {
       maskDataUrl = await normalizeImageEditMaskDataUrl(rawMaskDataUrl, imageUrls[0]);
@@ -2599,7 +2684,6 @@ api.post("/images/edit", async (c) => {
   if (imageJobCancelRequested(user.id, clientRequestId)) {
     return c.json({ cancelled: true, clientRequestId }, 409);
   }
-  const primarySourceImage = validSourceImages[0] ?? null;
   const sessionId = await ensureChatSession(
     user.id,
     String(body.sessionId ?? primarySourceImage?.session_id ?? "") || null,
@@ -2662,7 +2746,8 @@ api.post("/images/edit", async (c) => {
     editIntent,
     [IMAGE_COMPLETION_CONCURRENCY_REQUEST_KEY]: generationSettings.multiImageConcurrency,
     images: imageUrls.map((image_url) => ({ image_url })),
-    ...imageOptions.payload,
+    ...resolvedImageOptions,
+    ...(shouldInheritSourceBackground ? { [INHERITED_SOURCE_BACKGROUND_REQUEST_KEY]: true } : {}),
     ...(maskDataUrl ? { mask: maskDataUrl } : {}),
     ...(sourceReference ? { sourceReference } : {}),
     ...(webConversationContext ? { webConversationContext } : {})

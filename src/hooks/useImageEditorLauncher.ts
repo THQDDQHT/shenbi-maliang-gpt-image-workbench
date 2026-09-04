@@ -57,6 +57,7 @@ export function useImageEditorLauncher({
       totalImageCount: editorImageRequest.totalImageCount,
       libraryContinuations: editorImageRequest.libraryContinuations,
       initialPrompt: editorImageRequest.initialPrompt,
+      initialImageCount: editorImageRequest.initialImageCount,
       discardDraftOnClose: editorImageRequest.discardDraftOnClose
     });
     if (!editorImageRequest.persistAcrossSessionChange) setEditorImageRequest(null);

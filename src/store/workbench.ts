@@ -30,6 +30,7 @@ export type ImageEditorOpenRequest = {
   totalImageCount?: number;
   libraryContinuations?: ImageLibraryContinuations;
   initialPrompt?: string;
+  initialImageCount?: number;
   preserveSelectedAssets?: boolean;
   persistAcrossSessionChange?: boolean;
   discardDraftOnClose?: boolean;
