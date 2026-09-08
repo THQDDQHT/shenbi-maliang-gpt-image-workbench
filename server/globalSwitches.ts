@@ -28,14 +28,14 @@ export const DEFAULT_GLOBAL_SWITCH_ENABLED: Record<GlobalSwitchType, boolean> = 
   self_registration: false,
   asset_review: true,
   case_review: true,
-  starter_copy_generation: true,
+  starter_copy_generation: false,
   prompt_safety_review: false,
   smtp_service: false,
   sms_service: false,
   proxy_service: false,
   cpa_sync: false,
-  github_entry: true,
-  ai_client_install_entry: true,
+  github_entry: false,
+  ai_client_install_entry: false,
   debug_image_edit_mask: false
 };
 

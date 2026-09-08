@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import type { PublicBranding } from "../types";
 import { DEFAULT_LOGIN_ASSETS, normalizeLoginAssets } from "./loginAssets";
 
-export const DEFAULT_SITE_NAME = "神笔马良";
+export const DEFAULT_SITE_NAME = "啟画";
 export const DEFAULT_LOGO_URL = "/api/files/branding/builtin-logo?variant=thumb";
 export const DEFAULT_FAVICON_URL = "/api/files/branding/builtin-favicon?variant=thumb&v=default-logo";
 
@@ -10,8 +10,8 @@ export const DEFAULT_PUBLIC_BRANDING: PublicBranding = {
   siteName: DEFAULT_SITE_NAME,
   logoUrl: DEFAULT_LOGO_URL,
   faviconUrl: DEFAULT_FAVICON_URL,
-  showGithubEntry: true,
-  showAiClientInstallEntry: true,
+  showGithubEntry: false,
+  showAiClientInstallEntry: false,
   loginAssets: DEFAULT_LOGIN_ASSETS
 };
 
@@ -21,8 +21,8 @@ export function normalizePublicBranding(branding?: Partial<PublicBranding> | nul
     siteName,
     logoUrl: branding?.logoUrl || DEFAULT_LOGO_URL,
     faviconUrl: branding?.faviconUrl || DEFAULT_FAVICON_URL,
-    showGithubEntry: branding?.showGithubEntry ?? true,
-    showAiClientInstallEntry: branding?.showAiClientInstallEntry ?? true,
+    showGithubEntry: branding?.showGithubEntry ?? false,
+    showAiClientInstallEntry: branding?.showAiClientInstallEntry ?? false,
     loginAssets: normalizeLoginAssets(branding?.loginAssets ?? DEFAULT_LOGIN_ASSETS)
   };
 }

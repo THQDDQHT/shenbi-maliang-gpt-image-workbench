@@ -100,7 +100,7 @@ function globalSwitchDefaultFromLegacy(type: GlobalSwitchType) {
   }
   if (type === "asset_review" || type === "case_review") return DEFAULT_GLOBAL_SWITCH_ENABLED[type] ? 1 : 0;
   if (type === "starter_copy_generation" && tableExists(configDb, "starter_copy_settings")) {
-    return getOne<{ enabled: number }>(configDb, "select enabled from starter_copy_settings where id = ? limit 1", "default")?.enabled ?? 1;
+    return getOne<{ enabled: number }>(configDb, "select enabled from starter_copy_settings where id = ? limit 1", "default")?.enabled ?? 0;
   }
   if (type === "prompt_safety_review" && tableExists(configDb, "safety_review_settings")) {
     return getOne<{ enabled: number }>(configDb, "select enabled from safety_review_settings where id = ? limit 1", "default")?.enabled ?? 0;
@@ -2332,7 +2332,7 @@ export function initConfigDb() {
     configDb,
     "insert or ignore into starter_copy_settings (id, enabled, copy_count, updated_at) values (?, ?, ?, ?)",
     "default",
-    1,
+    0,
     50,
     promptOptimizerTimestamp
   );

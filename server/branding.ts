@@ -25,7 +25,7 @@ import { deleteStoredFilesIfUnreferenced, readStoredFile, secureBrandingAssetPat
 import type { BrandingAssetRow, BrandingAssetType, BrandingSettingsRow } from "./types";
 import { makeId, normalizeIdList, now } from "./utils";
 
-const DEFAULT_SITE_NAME = "神笔马良";
+const DEFAULT_SITE_NAME = "啟画";
 const DEFAULT_LOGO_ASSET_ID = "builtin-logo";
 const DEFAULT_FAVICON_ASSET_ID = "builtin-favicon";
 const DEFAULT_LOGIN_TITLE_LIGHT_ASSET_ID = "builtin-login-title-light";
@@ -40,10 +40,10 @@ const BRANDING_ASSET_TYPES: BrandingAssetType[] = [
   "login_background_light",
   "login_background_dark"
 ];
-const DEFAULT_LOGO_URL = "/image/logo.png";
-const DEFAULT_LOGO_THUMB_URL = "/image/logo-small.webp";
+const DEFAULT_LOGO_URL = "/image/qihua-logo.svg";
+const DEFAULT_LOGO_THUMB_URL = "/image/qihua-logo.svg";
 const DEFAULT_FAVICON_URL = DEFAULT_LOGO_URL;
-const DEFAULT_FAVICON_CACHE_VERSION = "default-logo";
+const DEFAULT_FAVICON_CACHE_VERSION = "qihua-v1";
 const PUBLIC_BRANDING_CACHE_MS = 30 * 1000;
 type BrandingAssetUrlVariant = "original" | "thumb" | "preview";
 
@@ -192,7 +192,7 @@ async function ensureBuiltinBrandingAssets() {
     name: "默认 Logo",
     url: DEFAULT_LOGO_URL,
     sortOrder: 0,
-    mimeType: "image/png"
+    mimeType: "image/svg+xml"
   });
   upsertBuiltinAsset({
     id: DEFAULT_FAVICON_ASSET_ID,
@@ -200,7 +200,7 @@ async function ensureBuiltinBrandingAssets() {
     name: "默认浏览器图标",
     url: DEFAULT_FAVICON_URL,
     sortOrder: 0,
-    mimeType: "image/png"
+    mimeType: "image/svg+xml"
   });
   if (loginAssets.titles.light) {
     upsertBuiltinAsset({
@@ -562,10 +562,10 @@ async function readBuiltinAsset(row: BrandingAssetRow, variant: BrandingAssetUrl
 
 function builtinAssetNeedsRefresh(row: BrandingAssetRow) {
   if (row.id === DEFAULT_LOGO_ASSET_ID) {
-    return row.source !== "builtin" || row.url !== DEFAULT_LOGO_URL || row.mime_type !== "image/png";
+    return row.source !== "builtin" || row.url !== DEFAULT_LOGO_URL || row.mime_type !== "image/svg+xml";
   }
   if (row.id === DEFAULT_FAVICON_ASSET_ID) {
-    return row.source !== "builtin" || row.url !== DEFAULT_FAVICON_URL || row.mime_type !== "image/png";
+    return row.source !== "builtin" || row.url !== DEFAULT_FAVICON_URL || row.mime_type !== "image/svg+xml";
   }
   return false;
 }

@@ -449,13 +449,7 @@ export function LoginPage({
       </div>
       <div className="login-side">
         <div className="login-title-wrap">
-          <img
-            key={visibleTitleSrc}
-            className={cx("login-title-art", titleTransition === "leaving" && "is-leaving", titleTransition === "entering" && "is-entering")}
-            src={visibleTitleSrc}
-            alt={siteName}
-            onError={handleTitleArtError}
-          />
+          <h1 style={{ fontSize: "clamp(3rem, 6vw, 5rem)", fontWeight: 600, letterSpacing: ".14em", margin: "0 0 24px" }}>{siteName}</h1>
         </div>
         <section className="login-panel">
           {registrationEnabled ? (

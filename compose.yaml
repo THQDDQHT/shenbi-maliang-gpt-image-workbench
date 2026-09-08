@@ -1,0 +1,26 @@
+name: qihua
+services:
+  web:
+    build: .
+    image: ${QIHUA_IMAGE:-qihua:local}
+    restart: unless-stopped
+    env_file: .env.production
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - qihua-data:/app/data
+    networks:
+      - cpa
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:8787/api/health');if(!r.ok||!(await r.json()).ok)process.exit(1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 4
+    stop_grace_period: 60s
+volumes:
+  qihua-data:
+networks:
+  cpa:
+    external: true
+    name: cliproxyapi_cpa-network

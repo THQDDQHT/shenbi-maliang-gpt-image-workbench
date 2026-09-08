@@ -44,6 +44,8 @@ export function ConfigDashboard() {
   const queryClient = useQueryClient();
   const { language, resolvedLanguage, setLanguage, t } = useI18n();
   const { showToast } = useToast();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const everydayTabs = new Set<ConfigTabValue>(["statistics", "users", "providers", "promptOptimizer", "branding", "backup", "requests", "modelLogs", "audit"]);
   const [activeTab, setActiveTab] = useState<ConfigTabValue>(storedConfigTab);
   const [sideCollapsed, setSideCollapsed] = useState(storedConfigSideCollapsed);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -108,11 +110,11 @@ export function ConfigDashboard() {
           </button>
         </div>
         <nav className="config-nav" aria-label={t("config.menu")}>
-          {CONFIG_NAV_CATEGORIES.map((category) => (
+          {CONFIG_NAV_CATEGORIES.filter((category) => showAdvanced || category.items.some((value) => everydayTabs.has(value) || value === activeTab)).map((category) => (
             <section className="config-nav-section" key={category.value}>
               <div className="config-nav-heading">{t(configCategoryLabelKey(category.value))}</div>
               <Tabs.List className="config-nav-section-list" aria-label={t("config.menu.sectionAria", { section: t(configCategoryLabelKey(category.value)) })}>
-                {configNavItemsForCategory(category.value).map(({ value, Icon }) => {
+                {configNavItemsForCategory(category.value).filter(({ value }) => showAdvanced || everydayTabs.has(value) || value === activeTab).map(({ value, Icon }) => {
                   const label = t(configNavLabelKey(value));
                   return (
                   <Tabs.Trigger value={value} key={value} title={sideCollapsed ? label : undefined}>
@@ -126,6 +128,7 @@ export function ConfigDashboard() {
           ))}
         </nav>
         <div className="config-side-tools">
+          <button className="ghost-btn" onClick={() => setShowAdvanced((value) => !value)} aria-expanded={showAdvanced}>{showAdvanced ? "收起高级设置" : "高级设置"}</button>
           <div className="config-language-control" title={sideCollapsed ? t("settings.language.title") : undefined}>
             <span className="config-language-icon" aria-hidden="true">
               <Languages size={16} />

@@ -1773,18 +1773,6 @@ export function WorkbenchShell({ user }: { user: User }) {
               onClick={() => setMobileMenuOpen(false)}
             >
               <NavLink
-                to="/cases"
-                className={({ isActive }) => cx("nav-item", isActive && "active")}
-                aria-label={t("sidebar.inspiration")}
-                data-sidebar-tip={t("sidebar.inspiration")}
-                data-sidebar-selection-key="nav:/cases"
-                onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 0)}
-                onClick={(event) => handleMainRouteNavigation(event, "/cases")}
-              >
-                <Lightbulb size={18} />
-                <span>{t("sidebar.inspiration")}</span>
-              </NavLink>
-              <NavLink
                 to="/assets"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
                 aria-label={t("sidebar.assets")}
