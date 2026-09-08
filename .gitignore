@@ -13,6 +13,7 @@ repo-src-full/
 docs/image-routing-chains.md
 
 .env
+.initial-password
 .env.*
 !.env.example
 
