@@ -10,6 +10,7 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY server ./server
+COPY src ./src
 COPY scripts/provision-qihua.ts ./scripts/provision-qihua.ts
 COPY distribution/codex-marketplace ./distribution/codex-marketplace
 COPY package.json ./

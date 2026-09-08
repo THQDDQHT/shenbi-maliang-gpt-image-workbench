@@ -41,12 +41,38 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
-      - uses: docker/build-push-action@v6
-        id: build
+      - name: Build candidate
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
+          load: true
+          tags: qihua:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Container startup smoke test
+        run: |
+          docker run -d --name qihua-smoke qihua:ci
+          trap 'docker logs --tail 100 qihua-smoke; docker rm -f qihua-smoke' EXIT
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect -f '{{.State.Running}}' qihua-smoke)" != true ]; then
+              exit 1
+            fi
+            if docker exec qihua-smoke bun -e 'const r=await fetch("http://127.0.0.1:8787/api/health");if(!r.ok||!(await r.json()).ok)process.exit(1)'; then
+              docker exec qihua-smoke bun -e 'const b=await (await fetch("http://127.0.0.1:8787/api/branding")).json();if(b.siteName!=="啟画"||b.showGithubEntry||b.showAiClientInstallEntry)process.exit(1);const r=await fetch("http://127.0.0.1:8787"+b.logoUrl);if(!r.ok)process.exit(1)'
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Publish validated image
+        uses: docker/build-push-action@v6
+        id: build
+        if: github.event_name != 'pull_request'
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
