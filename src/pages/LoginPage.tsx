@@ -449,7 +449,7 @@ export function LoginPage({
       </div>
       <div className="login-side">
         <div className="login-title-wrap">
-          <h1 style={{ fontSize: "clamp(3rem, 6vw, 5rem)", fontWeight: 600, letterSpacing: ".14em", margin: "0 0 24px" }}>{siteName}</h1>
+          <h1 style={{ fontSize: "clamp(3rem, 6vw, 5rem)", fontWeight: 600, letterSpacing: ".14em", margin: "0 0 24px", color: "var(--login-panel-text)", textShadow: "var(--login-title-shadow)" }}>{siteName}</h1>
         </div>
         <section className="login-panel">
           {registrationEnabled ? (
